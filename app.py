@@ -25,8 +25,19 @@ def translate_text(text):
 
 def main():
     st.set_page_config(page_title="AI Chat Analyzer", layout="wide")
-    st.title("Beauty AI Chat Analyzer")
-    df = load_data()
+    st.title("Chat Conversation Analyzer")
+
+    # File uploader
+    uploaded_file = st.file_uploader("Upload a CSV file", type="csv")
+    if uploaded_file is None:
+        st.warning("Please upload a CSV file to proceed.")
+        return
+
+    # Load data from uploaded file
+    df = pd.read_csv(uploaded_file, header=None, names=[
+        'thread_id', 'timestamp', 'role', 'message', 'region', 'extra'
+    ], usecols=range(5))
+    df['timestamp'] = pd.to_datetime(df['timestamp'])
 
     # Filter by launch date (July 2, 2025) to latest
     min_date = pd.to_datetime('2025-07-04')
