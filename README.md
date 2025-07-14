@@ -17,6 +17,10 @@ A Streamlit dashboard for analyzing conversations from a beauty AI assistant MVP
   - Region and role breakdowns (pie charts and tables)
   - Simple sentiment detection (happy/frustrated user messages)
 
+## Hosting
+
+The dashboard is hosted at: [https://layla-conversation-dashboard.streamlit.app/](https://layla-conversation-dashboard.streamlit.app/)
+
 ## Setup
 
 1. **Clone or download this repo**
