@@ -44,7 +44,7 @@ def main():
     max_date = df['timestamp'].max().normalize()
     df = df[df['timestamp'] >= min_date]
 
-    tab2, tab1 = st.tabs(["Analytics Dashboard", "Thread Explorer"])
+    tab2, tab1, tab3 = st.tabs(["Analytics Dashboard", "Thread Explorer", "Keyword Search"])
 
     with tab1:
         st.header("Thread Explorer")
@@ -93,6 +93,181 @@ def main():
                     st.markdown(f"**{row['role'].capitalize()}** ({row['timestamp']}): {msg}")
         else:
             st.info("No threads match the selected filters.")
+
+    with tab3:
+        st.header("🔍 Keyword Search Across All Threads")
+        
+        # Search interface
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            search_keyword = st.text_input("Enter keyword(s) to search across all messages:", 
+                                         placeholder="e.g., error, booking, payment, help")
+        with col2:
+            case_sensitive = st.checkbox("Case sensitive", value=False)
+        
+        col3, col4, col5 = st.columns(3)
+        with col3:
+            role_filter = st.selectbox("Filter by role:", ["All", "user", "assistant"])
+        with col4:
+            region_search_filter = st.selectbox("Filter by region:", ["All"] + sorted(df['region'].unique().tolist()))
+        with col5:
+            min_results = st.number_input("Max results:", min_value=10, max_value=1000, value=100, step=10)
+        
+        if search_keyword:
+            # Prepare search dataframe
+            search_df = df.copy()
+            
+            # Apply role filter
+            if role_filter != "All":
+                search_df = search_df[search_df['role'] == role_filter]
+            
+            # Apply region filter
+            if region_search_filter != "All":
+                search_df = search_df[search_df['region'] == region_search_filter]
+            
+            # Perform search
+            if case_sensitive:
+                mask = search_df['message'].str.contains(search_keyword, na=False)
+            else:
+                mask = search_df['message'].str.contains(search_keyword, case=False, na=False)
+            
+            results = search_df[mask].copy()
+            
+            if len(results) > 0:
+                st.success(f"Found **{len(results)}** messages containing '{search_keyword}'")
+                
+                # Summary statistics
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Total Matches", len(results))
+                with col2:
+                    st.metric("Unique Threads", results['thread_id'].nunique())
+                with col3:
+                    user_matches = len(results[results['role'] == 'user'])
+                    st.metric("User Messages", user_matches)
+                with col4:
+                    assistant_matches = len(results[results['role'] == 'assistant'])
+                    st.metric("Assistant Messages", assistant_matches)
+                
+                # Limit results for display
+                if len(results) > min_results:
+                    results_display = results.head(min_results)
+                    st.warning(f"Showing first {min_results} results out of {len(results)} total matches")
+                else:
+                    results_display = results
+                
+                # Sort by timestamp (most recent first)
+                results_display = results_display.sort_values('timestamp', ascending=False)
+                
+                # Display results with highlighting
+                st.subheader("Search Results")
+                
+                # Add download button for results
+                csv_results = results[['thread_id', 'timestamp', 'role', 'message', 'region']].copy()
+                csv_results['timestamp'] = csv_results['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+                csv_string = csv_results.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download search results as CSV",
+                    data=csv_string,
+                    file_name=f"keyword_search_{search_keyword.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
+                )
+                
+                # Group by thread for better organization
+                if st.checkbox("Group by thread", value=True):
+                    for thread_id in results_display['thread_id'].unique():
+                        thread_results = results_display[results_display['thread_id'] == thread_id]
+                        thread_info = thread_results.iloc[0]
+                        
+                        with st.expander(f"🧵 Thread {thread_id} | {thread_info['region']} | {len(thread_results)} matches"):
+                            for _, row in thread_results.iterrows():
+                                # Highlight the search term in the message
+                                message = row['message']
+                                if case_sensitive:
+                                    highlighted_message = message.replace(search_keyword, f"**🔍{search_keyword}**")
+                                else:
+                                    # Case-insensitive highlighting
+                                    pattern = re.compile(re.escape(search_keyword), re.IGNORECASE)
+                                    highlighted_message = pattern.sub(f"**🔍{search_keyword}**", message)
+                                
+                                # Display message with metadata
+                                role_color = "#1f77b4" if row['role'] == 'user' else "#ff7f0e"
+                                st.markdown(f"""
+                                <div style='border-left: 4px solid {role_color}; padding-left: 12px; margin: 8px 0;'>
+                                    <small style='color: #666;'>{row['timestamp'].strftime('%Y-%m-%d %H:%M:%S')} | <b>{row['role'].upper()}</b></small><br>
+                                    {highlighted_message}
+                                </div>
+                                """, unsafe_allow_html=True)
+                                
+                                # Add translation button for Arabic messages
+                                if is_arabic(row['message']):
+                                    if st.button(f"Translate", key=f"search_trans_{row.name}"):
+                                        translation = translate_text(row['message'])
+                                        st.markdown(f"<span style='color:green; font-style:italic;'><b>Translation:</b> {translation}</span>", unsafe_allow_html=True)
+                else:
+                    # Display as list without grouping
+                    for _, row in results_display.iterrows():
+                        # Highlight the search term in the message
+                        message = row['message']
+                        if case_sensitive:
+                            highlighted_message = message.replace(search_keyword, f"**🔍{search_keyword}**")
+                        else:
+                            # Case-insensitive highlighting
+                            pattern = re.compile(re.escape(search_keyword), re.IGNORECASE)
+                            highlighted_message = pattern.sub(f"**🔍{search_keyword}**", message)
+                        
+                        # Display message with metadata
+                        role_color = "#1f77b4" if row['role'] == 'user' else "#ff7f0e"
+                        st.markdown(f"""
+                        <div style='border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 8px 0; border-left: 4px solid {role_color};'>
+                            <div style='display: flex; justify-content: between; align-items: center; margin-bottom: 8px;'>
+                                <small style='color: #666;'><b>Thread:</b> {row['thread_id']} | <b>Time:</b> {row['timestamp'].strftime('%Y-%m-%d %H:%M:%S')} | <b>Role:</b> {row['role'].upper()} | <b>Region:</b> {row['region']}</small>
+                            </div>
+                            <div>{highlighted_message}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Add translation button for Arabic messages
+                        if is_arabic(row['message']):
+                            if st.button(f"Translate", key=f"search_trans_list_{row.name}"):
+                                translation = translate_text(row['message'])
+                                st.markdown(f"<span style='color:green; font-style:italic;'><b>Translation:</b> {translation}</span>", unsafe_allow_html=True)
+                
+                # Word frequency analysis of search results
+                st.subheader("📊 Word Analysis in Search Results")
+                all_text = ' '.join(results['message'].astype(str))
+                words = re.findall(r'\b\w+\b', all_text.lower())
+                word_freq = pd.Series(words).value_counts().head(20)
+                
+                if not word_freq.empty:
+                    fig_words = px.bar(
+                        x=word_freq.values,
+                        y=word_freq.index,
+                        orientation='h',
+                        title='Top 20 Most Frequent Words in Search Results',
+                        labels={'x': 'Frequency', 'y': 'Words'}
+                    )
+                    fig_words.update_layout(height=600)
+                    st.plotly_chart(fig_words, use_container_width=True)
+                    
+                # Timeline of search results
+                if len(results) > 1:
+                    st.subheader("📅 Timeline of Search Results")
+                    timeline_data = results.groupby(results['timestamp'].dt.date).size().reset_index(name='count')
+                    fig_timeline = px.line(
+                        timeline_data, 
+                        x='timestamp', 
+                        y='count',
+                        title=f"Daily frequency of '{search_keyword}' mentions",
+                        labels={'timestamp': 'Date', 'count': 'Number of mentions'}
+                    )
+                    st.plotly_chart(fig_timeline, use_container_width=True)
+                    
+            else:
+                st.warning(f"No messages found containing '{search_keyword}' with the selected filters.")
+                st.info("💡 **Tips for better search results:**\n- Try different keywords or synonyms\n- Check if case sensitivity is affecting your search\n- Remove role or region filters to broaden the search\n- Use partial words (e.g., 'book' to find 'booking', 'booked', etc.)")
+        else:
+            st.info("Enter a keyword above to search across all messages in all threads.")
 
     with tab2:
         st.header("Analytics Dashboard")
