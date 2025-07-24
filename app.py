@@ -44,10 +44,10 @@ def main():
     max_date = df['timestamp'].max().normalize()
     df = df[df['timestamp'] >= min_date]
 
-    tab2, tab1 = st.tabs(["Analytics Dashboard", "Thread Explorer"])
+    tab2, tab1, tab3 = st.tabs(["Analytics Dashboard", "Chat Explorer", "Keyword Search"])
 
     with tab1:
-        st.header("Thread Explorer")
+        st.header("Chat Explorer")
         # Sidebar filters
         col1, col2, col3 = st.columns(3)
         with col1:
@@ -70,15 +70,15 @@ def main():
         if time_filter:
             filtered_df = filtered_df[filtered_df['timestamp'].dt.strftime('%H:%M').str.contains(time_filter)]
 
-        threads = filtered_df.groupby('thread_id').first().reset_index()
-        search_term = st.text_input("Search in threads (user/assistant/message)")
+        chats = filtered_df.groupby('thread_id').first().reset_index()
+        search_term = st.text_input("Search in conversations (user/assistant/message)")
         if search_term:
-            mask = threads.apply(lambda row: search_term.lower() in str(row['thread_id']).lower() or search_term.lower() in str(row['region']).lower() or search_term.lower() in str(row['message']).lower(), axis=1)
-            threads = threads[mask]
-        thread_options = threads['thread_id'] + ' | ' + threads['timestamp'].dt.strftime('%Y-%m-%d %H:%M') + ' | ' + threads['region']
-        selected_thread = st.selectbox("Select a thread:", thread_options if not thread_options.empty else ["No threads found"])
-        if selected_thread != "No threads found":
-            thread_id = selected_thread.split(' | ')[0]
+            mask = chats.apply(lambda row: search_term.lower() in str(row['thread_id']).lower() or search_term.lower() in str(row['region']).lower() or search_term.lower() in str(row['message']).lower(), axis=1)
+            chats = chats[mask]
+        chat_options = chats['thread_id'] + ' | ' + chats['timestamp'].dt.strftime('%Y-%m-%d %H:%M') + ' | ' + chats['region']
+        selected_chat = st.selectbox("Select a conversation:", chat_options if not chat_options.empty else ["No conversations found"])
+        if selected_chat != "No conversations found":
+            thread_id = selected_chat.split(' | ')[0]
             thread_df = df[df['thread_id'] == thread_id]
             for _, row in thread_df.iterrows():
                 msg = row['message']
@@ -92,7 +92,182 @@ def main():
                 else:
                     st.markdown(f"**{row['role'].capitalize()}** ({row['timestamp']}): {msg}")
         else:
-            st.info("No threads match the selected filters.")
+            st.info("No conversations match the selected filters.")
+
+    with tab3:
+        st.header("🔍 Keyword Search Across All Conversations")
+        
+        # Search interface
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            search_keyword = st.text_input("Enter keyword(s) to search across all messages:", 
+                                         placeholder="e.g., error, booking, payment, help")
+        with col2:
+            case_sensitive = st.checkbox("Case sensitive", value=False)
+        
+        col3, col4, col5 = st.columns(3)
+        with col3:
+            role_filter = st.selectbox("Filter by sender:", ["All", "user", "assistant"])
+        with col4:
+            region_search_filter = st.selectbox("Filter by region:", ["All"] + sorted(df['region'].unique().tolist()))
+        with col5:
+            min_results = st.number_input("Max results:", min_value=10, max_value=1000, value=100, step=10)
+        
+        if search_keyword:
+            # Prepare search dataframe
+            search_df = df.copy()
+            
+            # Apply sender filter
+            if role_filter != "All":
+                search_df = search_df[search_df['role'] == role_filter]
+            
+            # Apply region filter
+            if region_search_filter != "All":
+                search_df = search_df[search_df['region'] == region_search_filter]
+            
+            # Perform search
+            if case_sensitive:
+                mask = search_df['message'].str.contains(search_keyword, na=False)
+            else:
+                mask = search_df['message'].str.contains(search_keyword, case=False, na=False)
+            
+            results = search_df[mask].copy()
+            
+            if len(results) > 0:
+                st.success(f"Found **{len(results)}** messages containing '{search_keyword}'")
+                
+                # Summary statistics
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric("Total Matches", len(results))
+                with col2:
+                    st.metric("Unique Conversations", results['thread_id'].nunique())
+                with col3:
+                    user_matches = len(results[results['role'] == 'user'])
+                    st.metric("User Messages", user_matches)
+                with col4:
+                    assistant_matches = len(results[results['role'] == 'assistant'])
+                    st.metric("Assistant Messages", assistant_matches)
+                
+                # Limit results for display
+                if len(results) > min_results:
+                    results_display = results.head(min_results)
+                    st.warning(f"Showing first {min_results} results out of {len(results)} total matches")
+                else:
+                    results_display = results
+                
+                # Sort by timestamp (most recent first)
+                results_display = results_display.sort_values('timestamp', ascending=False)
+                
+                # Display results with highlighting
+                st.subheader("Search Results")
+                
+                # Add download button for results
+                csv_results = results[['thread_id', 'timestamp', 'role', 'message', 'region']].copy()
+                csv_results['timestamp'] = csv_results['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S')
+                csv_string = csv_results.to_csv(index=False)
+                st.download_button(
+                    label="📥 Download search results as CSV",
+                    data=csv_string,
+                    file_name=f"keyword_search_{search_keyword.replace(' ', '_')}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                    mime="text/csv"
+                )
+                
+                # Group by conversation for better organization
+                if st.checkbox("Group by conversation", value=True):
+                    for thread_id in results_display['thread_id'].unique():
+                        thread_results = results_display[results_display['thread_id'] == thread_id]
+                        thread_info = thread_results.iloc[0]
+                        
+                        with st.expander(f"💬 Conversation {thread_id} | {thread_info['region']} | {len(thread_results)} matches"):
+                            for _, row in thread_results.iterrows():
+                                # Highlight the search term in the message
+                                message = row['message']
+                                if case_sensitive:
+                                    highlighted_message = message.replace(search_keyword, f"**🔍{search_keyword}**")
+                                else:
+                                    # Case-insensitive highlighting
+                                    pattern = re.compile(re.escape(search_keyword), re.IGNORECASE)
+                                    highlighted_message = pattern.sub(f"**🔍{search_keyword}**", message)
+                                
+                                # Display message with metadata
+                                role_color = "#1f77b4" if row['role'] == 'user' else "#ff7f0e"
+                                st.markdown(f"""
+                                <div style='border-left: 4px solid {role_color}; padding-left: 12px; margin: 8px 0;'>
+                                    <small style='color: #666;'>{row['timestamp'].strftime('%Y-%m-%d %H:%M:%S')} | <b>{row['role'].upper()}</b></small><br>
+                                    {highlighted_message}
+                                </div>
+                                """, unsafe_allow_html=True)
+                                
+                                # Add translation button for Arabic messages
+                                if is_arabic(row['message']):
+                                    if st.button(f"Translate", key=f"search_trans_{row.name}"):
+                                        translation = translate_text(row['message'])
+                                        st.markdown(f"<span style='color:green; font-style:italic;'><b>Translation:</b> {translation}</span>", unsafe_allow_html=True)
+                else:
+                    # Display as list without grouping
+                    for _, row in results_display.iterrows():
+                        # Highlight the search term in the message
+                        message = row['message']
+                        if case_sensitive:
+                            highlighted_message = message.replace(search_keyword, f"**🔍{search_keyword}**")
+                        else:
+                            # Case-insensitive highlighting
+                            pattern = re.compile(re.escape(search_keyword), re.IGNORECASE)
+                            highlighted_message = pattern.sub(f"**🔍{search_keyword}**", message)
+                        
+                        # Display message with metadata
+                        role_color = "#1f77b4" if row['role'] == 'user' else "#ff7f0e"
+                        st.markdown(f"""
+                        <div style='border: 1px solid #ddd; border-radius: 8px; padding: 12px; margin: 8px 0; border-left: 4px solid {role_color};'>
+                            <div style='display: flex; justify-content: between; align-items: center; margin-bottom: 8px;'>
+                                <small style='color: #666;'><b>Conversation:</b> {row['thread_id']} | <b>Time:</b> {row['timestamp'].strftime('%Y-%m-%d %H:%M:%S')} | <b>Sender:</b> {row['role'].upper()} | <b>Region:</b> {row['region']}</small>
+                            </div>
+                            <div>{highlighted_message}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
+                        # Add translation button for Arabic messages
+                        if is_arabic(row['message']):
+                            if st.button(f"Translate", key=f"search_trans_list_{row.name}"):
+                                translation = translate_text(row['message'])
+                                st.markdown(f"<span style='color:green; font-style:italic;'><b>Translation:</b> {translation}</span>", unsafe_allow_html=True)
+                
+                # Word frequency analysis of search results
+                st.subheader("📊 Word Analysis in Search Results")
+                all_text = ' '.join(results['message'].astype(str))
+                words = re.findall(r'\b\w+\b', all_text.lower())
+                word_freq = pd.Series(words).value_counts().head(20)
+                
+                if not word_freq.empty:
+                    fig_words = px.bar(
+                        x=word_freq.values,
+                        y=word_freq.index,
+                        orientation='h',
+                        title='Top 20 Most Frequent Words in Search Results',
+                        labels={'x': 'Frequency', 'y': 'Words'}
+                    )
+                    fig_words.update_layout(height=600)
+                    st.plotly_chart(fig_words, use_container_width=True)
+                    
+                # Timeline of search results
+                if len(results) > 1:
+                    st.subheader("📅 Timeline of Search Results")
+                    timeline_data = results.groupby(results['timestamp'].dt.date).size().reset_index(name='count')
+                    fig_timeline = px.line(
+                        timeline_data, 
+                        x='timestamp', 
+                        y='count',
+                        title=f"Daily frequency of '{search_keyword}' mentions",
+                        labels={'timestamp': 'Date', 'count': 'Number of mentions'}
+                    )
+                    st.plotly_chart(fig_timeline, use_container_width=True)
+                    
+            else:
+                st.warning(f"No messages found containing '{search_keyword}' with the selected filters.")
+                st.info("💡 **Tips for better search results:**\n- Try different keywords or synonyms\n- Check if case sensitivity is affecting your search\n- Remove sender or region filters to broaden the search\n- Use partial words (e.g., 'book' to find 'booking', 'booked', etc.)")
+        else:
+            st.info("Enter a keyword above to search across all messages in all conversations.")
 
     with tab2:
         st.header("Analytics Dashboard")
@@ -144,10 +319,10 @@ def main():
             ("Total Conversations", total_conversations, "Total Messages", total_messages),
             ("User Messages", user_messages, "Assistant Replies", assistant_messages),
             ("Arabic Messages", arabic_messages, "English Messages", english_messages),
-            (">6 Turn Conversations", conv_gt6, "≤2 Turn Conversations", conv_le2),
-            ("Empty Assistant Responses", len(empty_assistant), "Explicit Error Messages", error_msgs),
+            (">6 Message Conversations", conv_gt6, "≤2 Message Conversations", conv_le2),
+            ("Empty Assistant Responses", len(empty_assistant), "Error Messages", error_msgs),
             ("Happy User Messages", happy_msgs, "Frustrated User Messages", frustrated_msgs),
-            ("Average Msgs/Thread", f"{avg_len:.2f}", "Median Msgs/Thread", f"{median_len:.0f}"),
+            ("Average Messages/Chat", f"{avg_len:.2f}", "Median Messages/Chat", f"{median_len:.0f}"),
         ]
         metric_cols = st.columns(2)
         for left_label, left_val, right_label, right_val in paired_metrics:
@@ -160,9 +335,9 @@ def main():
 
         # --- Conversation Length Section ---
         st.subheader("Conversation Length Analysis")
-        st.markdown(f"**Average Messages per Thread:** <span style='color:#2e7be6;font-size:1.3rem'><b>{avg_len:.2f}</b></span>", unsafe_allow_html=True)
-        st.markdown(f"**Median Messages per Thread:** <span style='color:#2e7be6;font-size:1.3rem'><b>{median_len:.0f}</b></span>", unsafe_allow_html=True)
-        fig_hist = px.histogram(conv_lengths, nbins=20, title='Distribution of Conversation Lengths', labels={'value':'Messages per Thread'})
+        st.markdown(f"**Average Messages per Conversation:** <span style='color:#2e7be6;font-size:1.3rem'><b>{avg_len:.2f}</b></span>", unsafe_allow_html=True)
+        st.markdown(f"**Median Messages per Conversation:** <span style='color:#2e7be6;font-size:1.3rem'><b>{median_len:.0f}</b></span>", unsafe_allow_html=True)
+        fig_hist = px.histogram(conv_lengths, nbins=20, title='Distribution of Conversation Lengths', labels={'value':'Messages per Conversation'})
         st.plotly_chart(fig_hist, use_container_width=True)
         st.markdown("""
         <div style='margin-top:1.5rem;'></div>
@@ -183,7 +358,7 @@ def main():
 
         # Chats per day
         chats_per_day = df.groupby(df['timestamp'].dt.date)['thread_id'].nunique().reset_index()
-        fig1 = px.bar(chats_per_day, x='timestamp', y='thread_id', labels={'timestamp':'Date', 'thread_id':'Chat Threads'}, title='Chat Threads per Day')
+        fig1 = px.bar(chats_per_day, x='timestamp', y='thread_id', labels={'timestamp':'Date', 'thread_id':'Conversations'}, title='New Conversations per Day')
         st.plotly_chart(fig1, use_container_width=True)
         
         # Messages per day
@@ -193,10 +368,10 @@ def main():
 
         # Region distribution
         region_counts = df.groupby('region')['thread_id'].nunique().reset_index()
-        fig2 = px.pie(region_counts, names='region', values='thread_id', title='Chats by Region')
+        fig2 = px.pie(region_counts, names='region', values='thread_id', title='Conversations by Region')
         st.plotly_chart(fig2, use_container_width=True)
-        st.markdown("**Chats by Region (Table):**")
-        st.dataframe(region_counts.rename(columns={'thread_id': 'Chat Threads'}), use_container_width=True)
+        st.markdown("**Conversations by Region (Table):**")
+        st.dataframe(region_counts.rename(columns={'thread_id': 'Conversations'}), use_container_width=True)
 
         # Shortest conversations
         st.subheader("Longest Conversations")
