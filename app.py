@@ -24,8 +24,8 @@ def translate_text(text):
         return "[Translation failed]"
 
 def main():
-    st.set_page_config(page_title="AI Chat Analyzer", layout="wide")
-    st.title("Chat Conversation Analyzer")
+    st.set_page_config(page_title="Layla Conversation Analyzer", layout="wide")
+    st.title("Layla Conversation Analyzer")
 
     # File uploader
     uploaded_file = st.file_uploader("Upload a CSV file", type="csv")
