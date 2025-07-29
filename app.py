@@ -428,24 +428,53 @@ def main():
     with tab2:
         st.header("Analytics Dashboard")
 
+        # Date range selector for analytics
+        st.subheader("📅 Date Range Filter")
+        
+        # Define the full range (July 2, 2025 to latest date in database)
+        full_range_min = pd.to_datetime('2025-07-01').date()
+        full_range_max = df['timestamp'].max().date()
+        
+        analytics_date_filter = st.date_input(
+            "Select date range for analytics:",
+            value=(min_date.date(), max_date.date()),
+            min_value=full_range_min,
+            max_value=full_range_max,
+            help="Filter all analytics and charts by this date range"
+        )
+        
+        # Apply date filter to analytics data
+        analytics_df = df[
+            (df['timestamp'].dt.date >= analytics_date_filter[0]) & 
+            (df['timestamp'].dt.date <= analytics_date_filter[1])
+        ].copy()
+        
+        # Show filtered data info
+        if len(analytics_df) != len(df):
+            st.info(f"📊 Showing analytics for {analytics_date_filter[0]} to {analytics_date_filter[1]} | "
+                   f"Filtered: {len(analytics_df):,} messages from {analytics_df['thread_id'].nunique():,} conversations "
+                   f"(Original: {len(df):,} messages from {df['thread_id'].nunique():,} conversations)")
+        
+        st.divider()
+
         # --- Metrics Section ---
-        # Calculate metrics first
-        total_conversations = df['thread_id'].nunique()
-        total_messages = len(df)
-        user_messages = len(df[df['role'] == 'user'])
-        assistant_messages = len(df[df['role'] == 'assistant'])
-        arabic_messages = df['message'].apply(is_arabic).sum()
-        english_messages = (~df['message'].apply(is_arabic)).sum()
-        conv_lengths = df.groupby('thread_id').size()
+        # Calculate metrics from filtered data
+        total_conversations = analytics_df['thread_id'].nunique()
+        total_messages = len(analytics_df)
+        user_messages = len(analytics_df[analytics_df['role'] == 'user'])
+        assistant_messages = len(analytics_df[analytics_df['role'] == 'assistant'])
+        arabic_messages = analytics_df['message'].apply(is_arabic).sum()
+        english_messages = (~analytics_df['message'].apply(is_arabic)).sum()
+        conv_lengths = analytics_df.groupby('thread_id').size()
         conv_gt6 = (conv_lengths > 6).sum()
         conv_le2 = (conv_lengths <= 2).sum()
-        long_user_prompts = df[(df['role'] == 'user') & (df['message'].str.split().str.len() > 30)]
-        empty_assistant = df[(df['role'] == 'assistant') & (df['message'].str.strip() == '')]
-        error_msgs = df['message'].str.contains('error|failed|exception|problem|issue', case=False, na=False).sum()
-        happy_msgs = df['message'].str.contains('thank|great|awesome|perfect|amazing|love|happy|helpful|👍', case=False, na=False).sum()
-        frustrated_msgs = df['message'].str.contains('not working|bad|hate|angry|frustrated|annoy|useless|waste|problem|issue|disappoint|😡|😠|👎', case=False, na=False).sum()
-        avg_len = conv_lengths.mean()
-        median_len = conv_lengths.median()
+        long_user_prompts = analytics_df[(analytics_df['role'] == 'user') & (analytics_df['message'].str.split().str.len() > 30)]
+        empty_assistant = analytics_df[(analytics_df['role'] == 'assistant') & (analytics_df['message'].str.strip() == '')]
+        error_msgs = analytics_df['message'].str.contains('error|failed|exception|problem|issue', case=False, na=False).sum()
+        happy_msgs = analytics_df['message'].str.contains('thank|great|awesome|perfect|amazing|love|happy|helpful|👍', case=False, na=False).sum()
+        frustrated_msgs = analytics_df['message'].str.contains('not working|bad|hate|angry|frustrated|annoy|useless|waste|problem|issue|disappoint|😡|😠|👎', case=False, na=False).sum()
+        avg_len = conv_lengths.mean() if len(conv_lengths) > 0 else 0
+        median_len = conv_lengths.median() if len(conv_lengths) > 0 else 0
 
         st.markdown("""
         <style>
@@ -501,17 +530,17 @@ def main():
         st.dataframe(conv_lengths.sort_values(ascending=False).head(10).reset_index().rename(columns={0:'Messages'}), use_container_width=True)
 
         # Chats per day
-        chats_per_day = df.groupby(df['timestamp'].dt.date)['thread_id'].nunique().reset_index()
+        chats_per_day = analytics_df.groupby(analytics_df['timestamp'].dt.date)['thread_id'].nunique().reset_index()
         fig1 = px.bar(chats_per_day, x='timestamp', y='thread_id', labels={'timestamp':'Date', 'thread_id':'Conversations'}, title='New Conversations per Day')
         st.plotly_chart(fig1, use_container_width=True)
         
         # Messages per day
-        msgs_per_day = df.groupby(df['timestamp'].dt.date).size().reset_index(name='messages')
+        msgs_per_day = analytics_df.groupby(analytics_df['timestamp'].dt.date).size().reset_index(name='messages')
         fig_msgs = px.line(msgs_per_day, x='timestamp', y='messages', title='Messages Sent per Day')
         st.plotly_chart(fig_msgs, use_container_width=True)
 
         # Region distribution
-        region_counts = df.groupby('region')['thread_id'].nunique().reset_index()
+        region_counts = analytics_df.groupby('region')['thread_id'].nunique().reset_index()
         fig2 = px.pie(region_counts, names='region', values='thread_id', title='Conversations by Region')
         st.plotly_chart(fig2, use_container_width=True)
         st.markdown("**Conversations by Region (Table):**")
