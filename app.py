@@ -1,4 +1,5 @@
 import streamlit as st
+from st_supabase_connection import SupabaseConnection
 import pandas as pd
 import plotly.express as px
 from datetime import datetime
@@ -7,6 +8,40 @@ from deep_translator import GoogleTranslator
 import streamlit_authenticator as stauth
 import yaml
 from yaml.loader import SafeLoader
+import ssl
+import urllib.request
+
+# Load data from Supabase storage URL
+def load_data_from_url():
+    """Load conversation data from the Supabase storage URL"""
+    try:
+        # Get the conversations URL from secrets
+        conversations_url = st.secrets["connections"]["supabase"]["CONVERSATIONS_URL"]
+        
+        # Create SSL context that doesn't verify certificates (for signed URLs)
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        # For HTTPS URLs, use urllib to handle SSL context properly
+        if conversations_url.startswith('https'):
+            import urllib.request
+            
+            # Create a custom opener with the SSL context
+            opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ssl_context))
+            urllib.request.install_opener(opener)
+        
+        # Load CSV from URL (urllib opener handles SSL)
+        df = pd.read_csv(conversations_url, 
+                        header=None, 
+                        names=['thread_id', 'timestamp', 'role', 'message', 'region', 'extra'],
+                        usecols=range(5))
+        df['timestamp'] = pd.to_datetime(df['timestamp'])
+        return df
+    except Exception as e:
+        st.error(f"❌ Error loading data from URL: {e}")
+        st.info("💡 Please check your CONVERSATIONS_URL in secrets.toml")
+        return None
 
 # Load data
 def load_data():
@@ -97,23 +132,26 @@ def main():
         # Logout button
         authenticator.logout('🚪 Logout', 'main')
 
-    # Enhanced file uploader with better messaging
+    # Load data from Supabase storage URL
     st.divider()
-    uploaded_file = st.file_uploader(
-        "📁 Upload a CSV file to analyze", 
-        type="csv",
-        help="Upload your conversation data in CSV format to begin analysis"
-    )
-    if uploaded_file is None:
-        st.warning("⚠️ Please upload a CSV file to proceed with the analysis.")
-        st.info("💡 The CSV should contain columns: thread_id, timestamp, role, message, region")
-        return
-
-    # Load data from uploaded file
-    df = pd.read_csv(uploaded_file, header=None, names=[
-        'thread_id', 'timestamp', 'role', 'message', 'region', 'extra'
-    ], usecols=range(5))
-    df['timestamp'] = pd.to_datetime(df['timestamp'])
+    st.info("🔄 Loading conversation data from Supabase storage...")
+    
+    df = load_data_from_url()
+    
+    if df is None:
+        st.error("❌ Failed to load conversation data.")
+        st.stop()
+    
+    st.success(f"✅ Successfully loaded {len(df)} conversation records from Supabase!")
+    
+    # Display data info
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Total Records", len(df))
+    with col2:
+        st.metric("Unique Conversations", df['thread_id'].nunique())
+    with col3:
+        st.metric("Date Range", f"{df['timestamp'].dt.date.min()} to {df['timestamp'].dt.date.max()}")
 
     # Filter by launch date (July 2, 2025) to latest
     min_date = pd.to_datetime('2025-07-04')
