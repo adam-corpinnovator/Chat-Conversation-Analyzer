@@ -2,3 +2,4 @@
 *.csv
 .streamlit/secrets.toml
 .env
+hash_passwords.py
