@@ -195,8 +195,8 @@ def main():
             max_date_str = original_max_date.strftime('%b %d')
             st.metric("Date Range", f"{min_date_str} - {max_date_str}")
 
-    # Filter by launch date (July 2, 2025) to latest
-    min_date = pd.to_datetime('2025-07-04')
+    # Filter by launch date (July 1, 2025) to latest
+    min_date = pd.to_datetime('2025-07-01')
     max_date = df['timestamp'].max().normalize()
     df = df[df['timestamp'] >= min_date]
 
