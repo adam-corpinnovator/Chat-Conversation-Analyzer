@@ -431,7 +431,7 @@ def main():
         # Date range selector for analytics
         st.subheader("📅 Date Range Filter")
         
-        # Define the full range (July 2, 2025 to latest date in database)
+        # Define the full range (July 1, 2025 to latest date in database)
         full_range_min = pd.to_datetime('2025-07-01').date()
         full_range_max = df['timestamp'].max().date()
         
@@ -443,17 +443,37 @@ def main():
             help="Filter all analytics and charts by this date range"
         )
         
+        # Validate date range selection
+        if isinstance(analytics_date_filter, tuple) and len(analytics_date_filter) == 2:
+            start_date, end_date = analytics_date_filter
+        elif isinstance(analytics_date_filter, (list, tuple)) and len(analytics_date_filter) == 1:
+            # Only one date selected, use it as both start and end
+            start_date = end_date = analytics_date_filter[0]
+        else:
+            # Single date object (shouldn't happen with range=True, but just in case)
+            start_date = end_date = analytics_date_filter
+        
+        # Ensure we have valid dates
+        if start_date is None or end_date is None:
+            st.warning("⚠️ Please select a complete date range to continue.")
+            st.stop()
+        
         # Apply date filter to analytics data
         analytics_df = df[
-            (df['timestamp'].dt.date >= analytics_date_filter[0]) & 
-            (df['timestamp'].dt.date <= analytics_date_filter[1])
+            (df['timestamp'].dt.date >= start_date) & 
+            (df['timestamp'].dt.date <= end_date)
         ].copy()
         
         # Show filtered data info
         if len(analytics_df) != len(df):
-            st.info(f"📊 Showing analytics for {analytics_date_filter[0]} to {analytics_date_filter[1]} | "
+            st.info(f"📊 Showing analytics for {start_date} to {end_date} | "
                    f"Filtered: {len(analytics_df):,} messages from {analytics_df['thread_id'].nunique():,} conversations "
                    f"(Original: {len(df):,} messages from {df['thread_id'].nunique():,} conversations)")
+        
+        # Check if filtered data is empty
+        if len(analytics_df) == 0:
+            st.warning(f"⚠️ No data found for the selected date range ({start_date} to {end_date}). Please select a different date range.")
+            st.stop()
         
         st.divider()
 
