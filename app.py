@@ -1,4 +1,3 @@
-# filepath: /Users/adam.ahsan/Library/CloudStorage/OneDrive-M.C.T.FZE/Desktop/code/Chat-Conversation-Analyzer/app.py
 import streamlit as st
 import pandas as pd
 from datetime import datetime
