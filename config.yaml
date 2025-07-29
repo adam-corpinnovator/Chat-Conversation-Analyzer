@@ -1,0 +1,38 @@
+credentials:
+  usernames:
+    admin:
+      email: admin@example.com
+      first_name: Admin
+      last_name: User
+      password: $2b$12$As1n2XHLu33vcDPEuVBD/.AFdULDQwoEJR4X3sDNW25qrGGApuYwS # Password: 'admin123'
+      roles: [admin]
+      failed_login_attempts: 0 # Will be managed automatically
+      logged_in: False # Will be managed automatically
+    user1:
+      email: user1@example.com
+      first_name: Demo
+      last_name: User
+      password: $2b$12$6/.OVJMimZSoUEb7IlK4reLfHO2znAgavN24UZ6VI9uJwaKq5SxVi # Password: 'user123'
+      roles: [user]
+      failed_login_attempts: 0 # Will be managed automatically
+      logged_in: False # Will be managed automatically
+    demo:
+      email: demo@example.com
+      first_name: Demo
+      last_name: Account
+      password: $2b$12$Xm5qigHaW1.T9B8ZKqvK.eGxqQHBGMNfrFCrJxTJtDD5r1oNOd4mC # Password: 'demo123'
+      roles: [user]
+      failed_login_attempts: 0 # Will be managed automatically
+      logged_in: False # Will be managed automatically
+
+cookie:
+  expiry_days: 30
+  key: layla_analyzer_auth_key_v2_secure  # Enhanced security key
+  name: layla_analyzer_cookie
+
+# Pre-authorized emails for admin registration
+pre-authorized:
+  emails:
+    - admin@yourcompany.com
+    - user@yourcompany.com
+    - demo@yourcompany.com
