@@ -495,22 +495,10 @@ def main():
         st.markdown(f"**Median Messages per Conversation:** <span style='color:#2e7be6;font-size:1.3rem'><b>{median_len:.0f}</b></span>", unsafe_allow_html=True)
         fig_hist = px.histogram(conv_lengths, nbins=20, title='Distribution of Conversation Lengths', labels={'value':'Messages per Conversation'})
         st.plotly_chart(fig_hist, use_container_width=True)
-        st.markdown("""
-        <div style='margin-top:1.5rem;'></div>
-        <div style='display:flex;gap:2rem;'>
-            <div style='flex:1;'>
-                <b>Longest Conversations</b>
-                <div style='margin-bottom:0.5rem;'></div>
-        """, unsafe_allow_html=True)
-        st.dataframe(conv_lengths.sort_values(ascending=False).head(5).reset_index().rename(columns={0:'Messages'}), use_container_width=True)
-        st.markdown("""
-            </div>
-            <div style='flex:1;'>
-                <b>Shortest Conversations</b>
-                <div style='margin-bottom:0.5rem;'></div>
-        """, unsafe_allow_html=True)
-        st.dataframe(conv_lengths.sort_values().head(5).reset_index().rename(columns={0:'Messages'}), use_container_width=True)
-        st.markdown("</div></div>", unsafe_allow_html=True)
+        
+        # Show top 10 longest conversations
+        st.subheader("Top 10 Longest Conversations")
+        st.dataframe(conv_lengths.sort_values(ascending=False).head(10).reset_index().rename(columns={0:'Messages'}), use_container_width=True)
 
         # Chats per day
         chats_per_day = df.groupby(df['timestamp'].dt.date)['thread_id'].nunique().reset_index()
@@ -528,10 +516,6 @@ def main():
         st.plotly_chart(fig2, use_container_width=True)
         st.markdown("**Conversations by Region (Table):**")
         st.dataframe(region_counts.rename(columns={'thread_id': 'Conversations'}), use_container_width=True)
-
-        # Shortest conversations
-        st.subheader("Longest Conversations")
-        st.dataframe(conv_lengths.sort_values(ascending=False).head(10).reset_index().rename(columns={0:'Messages'}))
 
 if __name__ == "__main__":
     main()
