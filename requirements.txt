@@ -4,3 +4,5 @@ plotly
 deep-translator
 streamlit-authenticator
 pyyaml
+st-supabase-connection
+supabase

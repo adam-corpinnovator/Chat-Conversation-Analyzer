@@ -1,2 +1,4 @@
 .venv/
 *.csv
+.streamlit/secrets.toml
+.env
