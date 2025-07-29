@@ -1,6 +1,15 @@
-# Beauty AI Chat Analyzer
+# Layla AI Chat Analyzer
 
-A Streamlit dashboard for analyzing conversations from a beauty AI assistant MVP. This tool helps you explore, filter, and visualize chat data, with a focus on thread-level exploration and actionable analytics.
+A **secure** Streamlit dashboard for analyzing conversations from a beauty AI assistant MVP. This tool helps you explore, filter, and visualize chat data, with a focus on thread-level exploration and actionable analytics.
+
+## 🔐 Authentication & Security
+
+**NEW**: The dashboard now includes complete user authentication and management:
+- **Secure Login**: Username/password authentication with session management
+- **User Roles**: Admin and user role-based access control
+- **Profile Management**: Users can update their details and change passwords
+- **Admin Features**: User registration and management capabilities
+
 
 ## Features
 
@@ -33,6 +42,13 @@ The dashboard is hosted at: [https://layla-conversation-dashboard.streamlit.app/
    ```bash
    streamlit run app.py
    ```
+5. **Login** using one of the demo accounts above or create your own
+
+## Authentication Setup
+**Quick Start:**
+- The app will prompt for login on first access
+- Use accounts for testing
+- All user data is stored securely in `config.yaml`
 
 ## Data Format
 
