@@ -34,7 +34,6 @@ def handle_authentication(authenticator):
         st.info('💡 **Hint**: Check your credentials and try again')
         return False
     elif st.session_state.get('authentication_status') is None:
-        show_welcome_page()
         return False
     
     return True
@@ -44,26 +43,15 @@ def show_welcome_page():
     st.warning('🔐 Please enter your username and password to continue')
     
     # Enhanced welcome message
-    st.title("Layla Conversation Analyzer")
+    # st.title("Layla Conversation Analyzer")
     st.markdown("""
     ### Welcome to the Layla Conversation Analyzer Dashboard
     
-    This secure dashboard provides comprehensive analytics for beauty AI chat conversations.
+    ### 🔑 **Need Access?**
+    If you need access to this dashboard, please reach out to anyone from the **Corporate Innovation team**.
     
-    **🎯 Features include:**
-    - 📊 **Analytics Dashboard**: Key metrics, conversation trends, and insights
-    - 💬 **Chat Explorer**: Browse and search individual conversations with translation
-    - 🔍 **Keyword Search**: Search across all messages with advanced filtering
-    
-    **🚀 Demo Accounts:**
-    ```
-    Username: admin    | Password: admin123  | Role: admin (full access)
-    Username: user     | Password: user123   | Role: user (standard access)  
-    Username: demo     | Password: demo123   | Role: user (read-only access)
-    Username: layla    | Password: r7ZM1y58  | Role: user (standard access)
-    ```
-    
-    Please login above to access the dashboard.
+    ### Issues or Bugs?
+    If you're experiencing any issues or come across bugs, please contact: **Adam Ahsan** - adam.ahsan@chalhoub.com
     """)
 
 def show_authentication_ui():
