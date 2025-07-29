@@ -4,6 +4,9 @@ import plotly.express as px
 from datetime import datetime
 import re
 from deep_translator import GoogleTranslator
+import streamlit_authenticator as stauth
+import yaml
+from yaml.loader import SafeLoader
 
 # Load data
 def load_data():
@@ -25,12 +28,85 @@ def translate_text(text):
 
 def main():
     st.set_page_config(page_title="Layla Conversation Analyzer", layout="wide")
+    
+    # Load authentication config
+    with open('config.yaml') as file:
+        config = yaml.load(file, Loader=SafeLoader)
+    
+    # Create authenticator object with enhanced security
+    authenticator = stauth.Authenticate(
+        config['credentials'],
+        config['cookie']['name'],
+        config['cookie']['key'],
+        config['cookie']['expiry_days']
+    )
+    
+    # Authentication widget with enhanced error handling
+    try:
+        authenticator.login()
+    except Exception as e:
+        st.error(f"Authentication error: {e}")
+        st.stop()
+    
+    # Check authentication status with enhanced messages
+    if st.session_state.get('authentication_status') is False:
+        st.error('❌ Username/password is incorrect')
+        st.info('💡 **Hint**: Check your credentials and try again')
+        return
+    elif st.session_state.get('authentication_status') is None:
+        st.warning('🔐 Please enter your username and password to continue')
+        
+        # Enhanced welcome message
+        st.title("Layla Conversation Analyzer")
+        st.markdown("""
+        ### Welcome to the Layla Conversation Analyzer Dashboard
+        
+        This secure dashboard provides comprehensive analytics for beauty AI chat conversations.
+        
+        **🎯 Features include:**
+        - 📊 **Analytics Dashboard**: Key metrics, conversation trends, and insights
+        - 💬 **Chat Explorer**: Browse and search individual conversations with translation
+        - 🔍 **Keyword Search**: Search across all messages with advanced filtering
+        
+        **🚀 Demo Accounts:**
+        ```
+        Username: admin    | Password: admin123  | Role: admin (full access)
+        Username: user1    | Password: user123   | Role: user (standard access)  
+        Username: demo     | Password: demo123   | Role: user (read-only access)
+        ```
+        
+        Please login above to access the dashboard.
+        """)
+        return
+    
+    # If authenticated, show the main app with simple top bar
     st.title("Layla Conversation Analyzer")
+    
+    # Simple horizontal layout for role and logout
+    col1, col2 = st.columns([3, 1])
+    
+    with col1:
+        # Display user role
+        user_roles = st.session_state.get("roles", ["user"])
+        if "admin" in user_roles:
+            st.markdown("🔑 **Role:** `Admin`")
+        else:
+            st.markdown("👤 **Role:** `User`")
+    
+    with col2:
+        # Logout button
+        authenticator.logout('🚪 Logout', 'main')
 
-    # File uploader
-    uploaded_file = st.file_uploader("Upload a CSV file", type="csv")
+    # Enhanced file uploader with better messaging
+    st.divider()
+    uploaded_file = st.file_uploader(
+        "📁 Upload a CSV file to analyze", 
+        type="csv",
+        help="Upload your conversation data in CSV format to begin analysis"
+    )
     if uploaded_file is None:
-        st.warning("Please upload a CSV file to proceed.")
+        st.warning("⚠️ Please upload a CSV file to proceed with the analysis.")
+        st.info("💡 The CSV should contain columns: thread_id, timestamp, role, message, region")
         return
 
     # Load data from uploaded file
