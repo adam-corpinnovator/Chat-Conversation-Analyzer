@@ -187,7 +187,13 @@ def main():
         with col2:
             st.metric("Unique Conversations", df['thread_id'].nunique())
         with col3:
-            st.metric("Date Range", f"{df['timestamp'].dt.date.min()} to {df['timestamp'].dt.date.max()}")
+            # Format dates as "Jul 2 - Jul 29" to save space (chronological order)
+            # Calculate from original data before any filtering
+            original_min_date = df['timestamp'].min()
+            original_max_date = df['timestamp'].max()
+            min_date_str = original_min_date.strftime('%b %d')
+            max_date_str = original_max_date.strftime('%b %d')
+            st.metric("Date Range", f"{min_date_str} - {max_date_str}")
 
     # Filter by launch date (July 2, 2025) to latest
     min_date = pd.to_datetime('2025-07-04')
