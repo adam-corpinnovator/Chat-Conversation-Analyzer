@@ -1,5 +1,25 @@
+# Virtual environment
 .venv/
+
+# Data files
 *.csv
+
+# Secrets and configuration
 .streamlit/secrets.toml
 .env
+
+# Archive and backup files
+archive/
 hash_passwords.py
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
