@@ -3,6 +3,9 @@ Chat Explorer functionality for the Layla Conversation Analyzer
 """
 import streamlit as st
 import pandas as pd
+import json
+import re
+from datetime import datetime
 from .utils import is_arabic, translate_text
 
 def show_chat_explorer(df):
@@ -55,19 +58,411 @@ def show_chat_explorer(df):
     # Display selected conversation
     if selected_chat != "No conversations found":
         thread_id = selected_chat.split(' | ')[0]
-        thread_df = df[df['thread_id'] == thread_id]
+        thread_df = df[df['thread_id'] == thread_id].sort_values('timestamp')
+        
+        # Get conversation metadata
+        first_message = thread_df.iloc[0]
+        message_count = len(thread_df)
+        duration = thread_df['timestamp'].max() - thread_df['timestamp'].min()
+        
+        # Format duration as minutes and seconds
+        total_seconds = duration.total_seconds()
+        if total_seconds > 0:
+            minutes = int(total_seconds // 60)
+            seconds = int(total_seconds % 60)
+            if minutes > 0:
+                duration_str = f"{minutes}m {seconds}s"
+            else:
+                duration_str = f"{seconds}s"
+        else:
+            duration_str = "< 1s"
+        
+        # Enhanced conversation header
+        st.markdown(f"""
+        <div class="conversation-header">
+            <div class="conversation-title">💬 {thread_id}</div>
+            <div class="conversation-meta">
+                📅 {first_message['timestamp'].strftime('%B %d, %Y at %H:%M')} •  
+                🌍 {first_message['region']} •  
+                💬 {message_count} messages •  
+                ⏱️ {duration_str}
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Add custom CSS for chat bubbles
+        st.markdown("""
+        <style>
+        .user-message {
+            background: #007bff;
+            color: white;
+            padding: 15px 20px;
+            border-radius: 20px 20px 5px 20px;
+            margin: 10px 0 10px 50px;
+            box-shadow: 0 2px 10px rgba(0, 123, 255, 0.2);
+            position: relative;
+            max-width: 70%;
+            word-wrap: break-word;
+        }
+        
+        .assistant-message {
+            background: #f1f3f4;
+            color: #333;
+            padding: 15px 20px;
+            border-radius: 20px 20px 20px 5px;
+            margin: 10px 50px 10px 0;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            position: relative;
+            max-width: 80%;
+            word-wrap: break-word;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .message-time {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-bottom: 8px;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+        
+        .assistant-message .message-time {
+            color: #666;
+        }
+        
+        .user-message .message-time {
+            color: rgba(255, 255, 255, 0.9);
+        }
+        
+        .message-content {
+            line-height: 1.6;
+            font-size: 14px;
+            font-weight: 400;
+        }
+        
+        .translate-btn {
+            background: rgba(0, 123, 255, 0.1);
+            border: 1px solid rgba(0, 123, 255, 0.3);
+            color: #007bff;
+            padding: 6px 12px;
+            border-radius: 16px;
+            font-size: 11px;
+            margin-top: 10px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .translate-btn:hover {
+            background: rgba(0, 123, 255, 0.2);
+            transform: translateY(-1px);
+        }
+        
+        .translation {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 10px 14px;
+            margin-top: 10px;
+            font-style: italic;
+            border-left: 4px solid #007bff;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #333;
+        }
+        
+        .conversation-header {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(102, 126, 234, 0.3);
+        }
+        
+        .conversation-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin: 0;
+        }
+        
+        .conversation-meta {
+            font-size: 12px;
+            opacity: 0.9;
+            margin-top: 5px;
+        }
+        
+        .product-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+            border: 1px solid #dee2e6;
+            border-radius: 12px;
+            padding: 15px;
+            margin: 10px 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .product-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+        
+        .product-card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .product-icon {
+            font-size: 16px;
+            margin-right: 8px;
+        }
+        
+        .product-title {
+            font-weight: 600;
+            color: #495057;
+            font-size: 14px;
+        }
+        
+        .product-id {
+            font-family: 'Monaco', 'Consolas', monospace;
+            background: #f8f9fa;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #6c757d;
+            margin: 5px 0;
+        }
+        
+        .product-link {
+            display: inline-block;
+            background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        
+        .product-link:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(0,123,255,0.3);
+            text-decoration: none;
+            color: white;
+        }
+        </style>
+        """, unsafe_allow_html=True)
         
         for _, row in thread_df.iterrows():
-            msg = row['message']
-            if is_arabic(msg):
-                if st.button(f"Translate (EN) {row['timestamp']}", key=f"trans_{row['timestamp']}"):
-                    translation = translate_text(msg)
-                    st.markdown(f"**{row['role'].capitalize()}** ({row['timestamp']}): {msg}")
-                    st.markdown(f"<span style='color:green'><b>EN:</b> {translation}</span>", 
-                              unsafe_allow_html=True)
-                else:
-                    st.markdown(f"**{row['role'].capitalize()}** ({row['timestamp']}): {msg}")
-            else:
-                st.markdown(f"**{row['role'].capitalize()}** ({row['timestamp']}): {msg}")
+            _display_message(row)
     else:
         st.info("No conversations match the selected filters.")
+
+def _display_message(row):
+    """Display a single message with proper formatting"""
+    timestamp = row['timestamp']
+    role = row['role']
+    message = row['message']
+    
+    # Format timestamp
+    time_str = timestamp.strftime('%H:%M')
+    relative_time = _format_relative_time(timestamp)
+    
+    if role == 'user':
+        _display_user_message(message, time_str, relative_time, row)
+    else:
+        _display_assistant_message(message, time_str, relative_time, row)
+
+def _display_user_message(message, time_str, relative_time, row):
+    """Display user message with chat bubble styling"""
+    # Clean the message
+    clean_message = _clean_message_text(message)
+    
+    message_html = f"""
+    <div class="user-message">
+        <div class="message-time">👤 User • {time_str} • {relative_time}</div>
+        <div class="message-content">{clean_message}</div>
+    </div>
+    """
+    st.markdown(message_html, unsafe_allow_html=True)
+    
+    # Add translation button for Arabic messages
+    if is_arabic(message):
+        _add_translation_section(message, f"user_trans_{row.name}")
+
+def _display_assistant_message(message, time_str, relative_time, row):
+    """Display assistant message with chat bubble styling and JSON parsing"""
+    # Try to parse JSON response
+    recommendations, response_text = _parse_assistant_response(message)
+    
+    # Clean the response text
+    clean_response = _clean_message_text(response_text) if response_text else _clean_message_text(message)
+    
+    # Build the message HTML (without inline recommendations)
+    message_html = f"""
+    <div class="assistant-message">
+        <div class="message-time">🤖 Layla Assistant • {time_str} • {relative_time}</div>
+        <div class="message-content">{clean_response}</div>
+    </div>
+    """
+    
+    st.markdown(message_html, unsafe_allow_html=True)
+    
+    # Display recommendations as separate cards below the message
+    if recommendations:
+        _display_product_recommendations(recommendations)
+    
+    # Add translation button for Arabic messages
+    if is_arabic(response_text or message):
+        _add_translation_section(response_text or message, f"assistant_trans_{row.name}")
+
+def _display_product_recommendations(recommendations):
+    """Display product recommendations as separate cards"""
+    if not recommendations:
+        return
+    
+    rec_count = len(recommendations)
+    rec_icon = "🎁" if rec_count == 1 else "🛍️"
+    
+    st.markdown(f"""
+    <div style="margin: 15px 50px 15px 0;">
+        <div style="font-size: 14px; font-weight: 600; color: #495057; margin-bottom: 10px;">
+            {rec_icon} {rec_count} Product Recommendation{'s' if rec_count > 1 else ''}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    for i, product_id in enumerate(recommendations):
+        if product_id:  # Only display if product_id is not empty
+            product_link = f"https://www.faces.ae/en/search?q={product_id}&lang=en_AE"
+            
+            st.markdown(f"""
+            <div class="product-card">
+                <div class="product-card-header">
+                    <span class="product-icon">🛍️</span>
+                    <span class="product-title">Product Recommendation {i + 1}</span>
+                </div>
+                <div class="product-id">ID: {product_id}</div>
+                <a href="{product_link}" target="_blank" class="product-link">
+                    🔗 View on Faces.ae
+                </a>
+            </div>
+            """, unsafe_allow_html=True)
+
+def _parse_assistant_response(message):
+    """Parse JSON from assistant response to extract recommendations and response text"""
+    try:
+        # Clean the message first
+        clean_msg = message.strip()
+        
+        # Try to parse as JSON - handle different JSON formats
+        if clean_msg.startswith('{"') and clean_msg.endswith('"}'):
+            data = json.loads(clean_msg)
+            recommendations = []
+            response_text = ""
+            
+            # Extract recommendations
+            if 'recommendations' in data and isinstance(data['recommendations'], list):
+                for item in data['recommendations']:
+                    if isinstance(item, dict) and 'primary_id' in item:
+                        primary_id = item['primary_id']
+                        if primary_id and primary_id.strip():  # Only add non-empty IDs
+                            recommendations.append(primary_id.strip())
+            
+            # Extract response text
+            if 'response_text' in data:
+                response_text = data['response_text']
+            
+            return recommendations, response_text
+            
+    except (json.JSONDecodeError, KeyError, TypeError) as e:
+        # If JSON parsing fails, try to extract manually
+        try:
+            # Look for response_text pattern
+            response_match = re.search(r'"response_text":\s*"(.*?)"(?=\s*[,}])', message, re.DOTALL)
+            if response_match:
+                response_text = response_match.group(1)
+                # Unescape the text
+                response_text = response_text.replace('\\"', '"').replace('\\n', '\n')
+                
+                # Look for recommendations
+                recommendations = []
+                rec_matches = re.findall(r'"primary_id":\s*"([^"]+)"', message)
+                recommendations = [rec.strip() for rec in rec_matches if rec.strip()]
+                
+                return recommendations, response_text
+        except:
+            pass
+    
+    return [], message
+
+def _clean_message_text(text):
+    """Clean and format message text for better display"""
+    if not text:
+        return ""
+    
+    # Remove extra quotes and escape characters
+    text = text.replace('\\"', '"').replace('\\n', '\n')
+    
+    # Remove leading/trailing quotes if they wrap the entire message
+    if text.startswith('"') and text.endswith('"') and text.count('"') == 2:
+        text = text[1:-1]
+    
+    # Remove unwanted symbols and clean up
+    text = text.replace('\\', '')  # Remove backslashes
+    
+    # Convert newlines to HTML breaks
+    text = text.replace('\n', '<br>')
+    
+    # Convert markdown-style formatting to HTML
+    text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
+    text = re.sub(r'### (.*?)(<br>|$)', r'<h4>\1</h4>', text)
+    text = re.sub(r'- \*\*(.*?)\*\*', r'<br>• <strong>\1</strong>', text)
+    
+    # Handle bullet points and lists
+    text = re.sub(r'^- (.*?)$', r'• \1', text, flags=re.MULTILINE)
+    text = re.sub(r'<br>- (.*?)(<br>|$)', r'<br>• \1\2', text)
+    
+    # Clean up multiple spaces and breaks
+    text = re.sub(r'\s+', ' ', text)
+    text = re.sub(r'(<br>\s*){3,}', '<br><br>', text)  # Limit consecutive breaks
+    text = text.strip()
+    
+    return text
+
+def _add_translation_section(message, key):
+    """Add translation button and display for Arabic messages"""
+    col1, col2 = st.columns([1, 4])
+    with col1:
+        if st.button("🔤 Translate", key=key, help="Translate to English"):
+            st.session_state[f"{key}_translation"] = translate_text(message)
+    
+    # Display translation if it exists
+    if f"{key}_translation" in st.session_state:
+        translation = st.session_state[f"{key}_translation"]
+        st.markdown(f"""
+        <div class="translation">
+            <strong>🔤 Translation:</strong><br>{_clean_message_text(translation)}
+        </div>
+        """, unsafe_allow_html=True)
+
+def _format_relative_time(timestamp):
+    """Format timestamp to relative time (e.g., '2 minutes ago', '1 hour ago')"""
+    now = datetime.now()
+    if timestamp.tzinfo is None:
+        timestamp = timestamp.replace(tzinfo=None)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=None)
+    
+    diff = now - timestamp
+    
+    if diff.days > 0:
+        return f"{diff.days} day{'s' if diff.days > 1 else ''} ago"
+    elif diff.seconds >= 3600:
+        hours = diff.seconds // 3600
+        return f"{hours} hour{'s' if hours > 1 else ''} ago"
+    elif diff.seconds >= 60:
+        minutes = diff.seconds // 60
+        return f"{minutes} minute{'s' if minutes > 1 else ''} ago"
+    else:
+        return "Just now"
