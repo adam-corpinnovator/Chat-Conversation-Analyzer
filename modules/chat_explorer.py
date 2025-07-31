@@ -458,7 +458,7 @@ def _display_product_recommendations(recommendations):
     # Create a container for the recommendations
     with st.container():
         # Header
-        st.markdown(f"### {rec_count} Product Recommendation{'s' if rec_count > 1 else ''}")
+        st.markdown(f"#### {rec_count} Product Recommendation{'s' if rec_count > 1 else ''}")
         
         # Create columns for horizontal layout
         # Calculate number of columns based on recommendations count (max 5 per row)
