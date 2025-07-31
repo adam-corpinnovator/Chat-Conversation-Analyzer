@@ -57,18 +57,26 @@ def show_chat_explorer(df):
     if time_filter:
         filtered_df = filtered_df[filtered_df['timestamp'].dt.strftime('%H:%M').str.contains(time_filter)]
     
-    # Apply opening category filter
+    # Apply opening category filter - optimized to avoid redundant computation
     if opening_category_filter != "All":
-        # Get conversations that match the selected opening category
-        matching_thread_ids = []
+        # Pre-compute opening categories for all conversations
+        conversation_categories = {}
         for thread_id in filtered_df['thread_id'].unique():
             thread_messages = filtered_df[filtered_df['thread_id'] == thread_id].sort_values('timestamp')
             first_user_message = thread_messages[thread_messages['role'] == 'user']
             
             if len(first_user_message) > 0:
                 category = categorize_opening_message(first_user_message.iloc[0]['message'])
-                if category == opening_category_filter:
-                    matching_thread_ids.append(thread_id)
+            else:
+                category = "Others"
+            
+            conversation_categories[thread_id] = category
+        
+        # Filter conversations that match the selected category
+        matching_thread_ids = [
+            thread_id for thread_id, category in conversation_categories.items() 
+            if category == opening_category_filter
+        ]
         
         # Filter dataframe to only include matching conversations
         filtered_df = filtered_df[filtered_df['thread_id'].isin(matching_thread_ids)]

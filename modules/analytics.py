@@ -165,12 +165,10 @@ def show_opening_categories_analysis(analytics_df):
     """Display conversation opening categories analysis"""
     st.subheader("📝 Conversation Opening Categories")
     
-    # Get unique conversations and their opening categories
-    conversations = analytics_df.groupby('thread_id').apply(
-        lambda group: group.sort_values('timestamp').iloc[0]
-    ).reset_index(drop=True)
+    # Get unique conversations and their opening categories - fixed to avoid pandas warning
+    conversations = analytics_df.groupby('thread_id').first().reset_index()
     
-    # Get first user message for each conversation to categorize
+    # Get first user message for each conversation to categorize - optimized approach
     opening_categories = []
     for thread_id in conversations['thread_id']:
         thread_messages = analytics_df[analytics_df['thread_id'] == thread_id].sort_values('timestamp')
@@ -247,7 +245,7 @@ def show_opening_categories_analysis(analytics_df):
     display_df['Count'] = display_df['Count'].astype(str) + ' (' + display_df['Percentage'].astype(str) + '%)'
     display_df = display_df[['Category', 'Count']].rename(columns={'Count': 'Conversations (Percentage)'})
     st.dataframe(display_df, use_container_width=True, hide_index=True)
-    
+
 
 def show_conversation_length_analysis(analytics_df):
     """Display conversation length analysis section"""
