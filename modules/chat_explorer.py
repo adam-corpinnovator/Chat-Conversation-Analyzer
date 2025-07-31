@@ -12,6 +12,18 @@ def show_chat_explorer(df):
     """Display the chat explorer interface"""
     st.header("Chat Explorer")
     
+    # Check if dataframe is empty
+    if df.empty:
+        st.warning("No chat data available. Please upload a file first.")
+        return
+    
+    # Ensure required columns exist
+    required_columns = ['timestamp', 'region', 'thread_id', 'role', 'message']
+    missing_columns = [col for col in required_columns if col not in df.columns]
+    if missing_columns:
+        st.error(f"Missing required columns: {', '.join(missing_columns)}")
+        return
+    
     # Filter by launch date (July 1, 2025) to latest
     min_date = pd.to_datetime('2025-07-01')
     max_date = df['timestamp'].max().normalize()
