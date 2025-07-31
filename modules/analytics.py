@@ -169,23 +169,24 @@ def show_opening_categories_analysis(analytics_df):
     conversations = analytics_df.groupby('thread_id').first().reset_index()
     
     # Get first user message for each conversation to categorize - optimized approach
-    opening_categories = []
-    for thread_id in conversations['thread_id']:
-        thread_messages = analytics_df[analytics_df['thread_id'] == thread_id].sort_values('timestamp')
-        first_user_message = thread_messages[thread_messages['role'] == 'user']
-        
-        if len(first_user_message) > 0:
-            category = categorize_opening_message(first_user_message.iloc[0]['message'])
-        else:
-            category = "Others"
-        
-        opening_categories.append(category)
+    # Extract the first user message for each thread_id
+    first_user_messages = (
+        analytics_df[analytics_df['role'] == 'user']
+        .sort_values('timestamp')
+        .groupby('thread_id')
+        .first()
+        .reset_index()
+    )
     
-    # Create DataFrame with categories
-    category_df = pd.DataFrame({
-        'thread_id': conversations['thread_id'],
-        'category': opening_categories
-    })
+    # Categorize the opening messages
+    first_user_messages['category'] = first_user_messages['message'].apply(categorize_opening_message)
+    
+    # Merge categories back with conversations
+    category_df = conversations.merge(
+        first_user_messages[['thread_id', 'category']],
+        on='thread_id',
+        how='left'
+    ).fillna({'category': 'Others'})
     
     # Count conversations by category
     category_counts = category_df['category'].value_counts().reset_index()
