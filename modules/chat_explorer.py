@@ -6,7 +6,7 @@ import pandas as pd
 import json
 import re
 from datetime import datetime
-from .utils import is_arabic, translate_text
+from .utils import is_arabic, translate_text, categorize_opening_message
 
 def show_chat_explorer(df):
     """Display the chat explorer interface"""
@@ -30,7 +30,7 @@ def show_chat_explorer(df):
     filtered_df = df[df['timestamp'] >= min_date]
     
     # Sidebar filters
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         date_filter = st.date_input(
             "Date (range)",
@@ -41,6 +41,10 @@ def show_chat_explorer(df):
     with col2:
         region_filter = st.selectbox("Region", options=["All"] + sorted(filtered_df['region'].unique().tolist()))
     with col3:
+        # Opening category filter
+        category_options = ["All", "Fragrance Help", "Skincare Routine", "Product Summarization", "Others"]
+        opening_category_filter = st.selectbox("Opening Category", options=category_options)
+    with col4:
         time_filter = st.text_input("Time (HH:MM, optional)")
 
     # Apply filters
@@ -52,6 +56,22 @@ def show_chat_explorer(df):
     
     if time_filter:
         filtered_df = filtered_df[filtered_df['timestamp'].dt.strftime('%H:%M').str.contains(time_filter)]
+    
+    # Apply opening category filter
+    if opening_category_filter != "All":
+        # Get conversations that match the selected opening category
+        matching_thread_ids = []
+        for thread_id in filtered_df['thread_id'].unique():
+            thread_messages = filtered_df[filtered_df['thread_id'] == thread_id].sort_values('timestamp')
+            first_user_message = thread_messages[thread_messages['role'] == 'user']
+            
+            if len(first_user_message) > 0:
+                category = categorize_opening_message(first_user_message.iloc[0]['message'])
+                if category == opening_category_filter:
+                    matching_thread_ids.append(thread_id)
+        
+        # Filter dataframe to only include matching conversations
+        filtered_df = filtered_df[filtered_df['thread_id'].isin(matching_thread_ids)]
 
     # Search and conversation selection
     chats = filtered_df.groupby('thread_id').first().reset_index()
@@ -89,6 +109,13 @@ def show_chat_explorer(df):
         else:
             duration_str = "< 1s"
         
+        # Get opening category for this conversation
+        first_user_message = thread_df[thread_df['role'] == 'user']
+        if len(first_user_message) > 0:
+            opening_category = categorize_opening_message(first_user_message.iloc[0]['message'])
+        else:
+            opening_category = "Others"
+        
         # Enhanced conversation header
         st.markdown(f"""
         <div class="conversation-header">
@@ -96,6 +123,7 @@ def show_chat_explorer(df):
             <div class="conversation-meta">
                 📅 {first_message['timestamp'].strftime('%B %d, %Y at %H:%M')} •  
                 🌍 {first_message['region']} •  
+                🏷️ {opening_category} •  
                 💬 {message_count} messages •  
                 ⏱️ {duration_str}
             </div>
