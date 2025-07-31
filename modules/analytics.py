@@ -4,7 +4,7 @@ Analytics functions for the Layla Conversation Analyzer
 import streamlit as st
 import pandas as pd
 import plotly.express as px
-from .utils import is_arabic
+from .utils import is_arabic, categorize_opening_message
 
 def show_analytics_dashboard(df):
     """Display the complete analytics dashboard"""
@@ -49,6 +49,7 @@ def show_analytics_dashboard(df):
 
     # Display all analytics sections
     show_key_metrics(analytics_df)
+    show_opening_categories_analysis(analytics_df)
     show_conversation_length_analysis(analytics_df)
     show_daily_analytics(analytics_df)
     show_region_distribution(analytics_df)
@@ -160,14 +161,97 @@ def show_key_metrics(analytics_df):
     # Additional: Long user prompts
     st.markdown(f"<div class='metric-box'><div class='metric-title'>Long User Prompts (&gt;30 words)</div><div class='metric-value'>{len(metrics['long_user_prompts'])}</div></div>", unsafe_allow_html=True)
 
+def show_opening_categories_analysis(analytics_df):
+    """Display conversation opening categories analysis"""
+    st.subheader("📝 Conversation Opening Categories")
+    
+    # Get unique conversations and their opening categories - fixed to avoid pandas warning
+    conversations = analytics_df.groupby('thread_id').first().reset_index()
+    
+    # Get first user message for each conversation to categorize - optimized approach
+    # Extract the first user message for each thread_id
+    first_user_messages = (
+        analytics_df[analytics_df['role'] == 'user']
+        .sort_values('timestamp')
+        .groupby('thread_id')
+        .first()
+        .reset_index()
+    )
+    
+    # Categorize the opening messages
+    first_user_messages['category'] = first_user_messages['message'].apply(categorize_opening_message)
+    
+    # Merge categories back with conversations
+    category_df = conversations.merge(
+        first_user_messages[['thread_id', 'category']],
+        on='thread_id',
+        how='left'
+    ).fillna({'category': 'Others'})
+    
+    # Count conversations by category
+    category_counts = category_df['category'].value_counts().reset_index()
+    category_counts.columns = ['Category', 'Count']
+    
+    # Calculate percentages
+    total_conversations = len(category_df)
+    category_counts['Percentage'] = (category_counts['Count'] / total_conversations * 100).round(1)
+    
+    # Display metrics
+    col1, col2, col3, col4 = st.columns(4)
+    categories = ['Fragrance Help', 'Skincare Routine', 'Product Summarization', 'Others']
+    cols = [col1, col2, col3, col4]
+    
+    for i, category in enumerate(categories):
+        count = category_counts[category_counts['Category'] == category]['Count'].values
+        count = count[0] if len(count) > 0 else 0
+        percentage = category_counts[category_counts['Category'] == category]['Percentage'].values
+        percentage = percentage[0] if len(percentage) > 0 else 0
+        
+        with cols[i]:
+            st.metric(category, f"{count} ({percentage}%)")
+    
+    # Create visualizations
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        # Pie chart
+        fig_pie = px.pie(
+            category_counts, 
+            values='Count', 
+            names='Category',
+            title='Distribution of Conversation Opening Categories',
+            color_discrete_sequence=px.colors.qualitative.Set3
+        )
+        st.plotly_chart(fig_pie, use_container_width=True)
+    
+    with col2:
+        # Bar chart
+        fig_bar = px.bar(
+            category_counts.sort_values('Count', ascending=True), 
+            x='Count', 
+            y='Category',
+            orientation='h',
+            title='Conversations by Opening Category',
+            text='Count',
+            color='Category',
+            color_discrete_sequence=px.colors.qualitative.Set3
+        )
+        fig_bar.update_traces(texttemplate='%{text}', textposition='outside')
+        fig_bar.update_layout(showlegend=False)
+        st.plotly_chart(fig_bar, use_container_width=True)
+    
+    # Detailed breakdown table
+    st.markdown("**Detailed Breakdown:**")
+    display_df = category_counts.copy()
+    display_df['Count'] = display_df['Count'].astype(str) + ' (' + display_df['Percentage'].astype(str) + '%)'
+    display_df = display_df[['Category', 'Count']].rename(columns={'Count': 'Conversations (Percentage)'})
+    st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+
 def show_conversation_length_analysis(analytics_df):
     """Display conversation length analysis section"""
     metrics = calculate_metrics(analytics_df)
     conv_lengths = metrics['conv_lengths']
-    
-    st.subheader("Conversation Length Analysis")
-    st.markdown(f"**Average Messages per Conversation:** <span style='color:#2e7be6;font-size:1.3rem'><b>{metrics['avg_len']:.2f}</b></span>", unsafe_allow_html=True)
-    st.markdown(f"**Median Messages per Conversation:** <span style='color:#2e7be6;font-size:1.3rem'><b>{metrics['median_len']:.0f}</b></span>", unsafe_allow_html=True)
     
     # Histogram
     fig_hist = px.histogram(conv_lengths, nbins=20, title='Distribution of Conversation Lengths', labels={'value':'Messages per Conversation'})

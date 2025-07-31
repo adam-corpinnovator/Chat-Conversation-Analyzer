@@ -6,7 +6,7 @@ import pandas as pd
 import plotly.express as px
 import re
 from datetime import datetime
-from .utils import is_arabic, translate_text
+from .utils import is_arabic, translate_text, categorize_opening_message
 
 def show_keyword_search(df):
     """Display the keyword search interface"""
