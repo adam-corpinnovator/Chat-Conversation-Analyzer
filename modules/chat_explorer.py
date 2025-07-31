@@ -264,7 +264,7 @@ def show_chat_explorer(df):
         }
         
         .conversation-meta {
-            font-size: 12px;
+            font-size: 15px;
             opacity: 0.9;
             margin-top: 5px;
         }
