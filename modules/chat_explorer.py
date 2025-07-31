@@ -292,7 +292,7 @@ def _display_user_message(message, time_str, relative_time, row):
     
     message_html = f"""
     <div class="user-message">
-        <div class="message-time">👤 User • {time_str} • {relative_time}</div>
+        <div class="message-time">User • {time_str} • {relative_time}</div>
         <div class="message-content">{clean_message}</div>
     </div>
     """
@@ -372,70 +372,69 @@ def _parse_assistant_response(message):
     
     original_message = message.strip()
     
-    # Handle CSV format: """{"recommendations":...}"""
-    if original_message.startswith('"""') and original_message.endswith('"""'):
-        # Remove triple quotes
-        json_content = original_message[3:-3]
-    else:
-        json_content = original_message
-    
-    # Try to parse the JSON
     try:
-        # First, unescape the JSON string - handle double escaped quotes
-        # Convert \" back to " and \\" back to \"
+        # Handle CSV format: """{"recommendations":...}"""
+        if original_message.startswith('"""') and original_message.endswith('"""'):
+            json_content = original_message[3:-3]
+        else:
+            json_content = original_message
+        
+        # Clean and parse JSON with improved error handling
         clean_json = json_content.replace('\\"', '"')
         
-        # Handle cases where the JSON itself is quoted
         if clean_json.startswith('"') and clean_json.endswith('"'):
-            clean_json = clean_json[1:-1]
-            # Unescape again after removing outer quotes
-            clean_json = clean_json.replace('\\"', '"')
+            clean_json = clean_json[1:-1].replace('\\"', '"')
         
-        # Parse the JSON
         data = json.loads(clean_json)
         
         recommendations = []
         response_text = ""
         
-        # Extract recommendations
+        # Extract recommendations with validation
         if 'recommendations' in data and isinstance(data['recommendations'], list):
             for item in data['recommendations']:
                 if isinstance(item, dict) and 'primary_id' in item:
                     primary_id = str(item['primary_id']).strip()
-                    if primary_id:
+                    if primary_id and primary_id.lower() != 'null':
                         recommendations.append(primary_id)
         
         # Extract response text
         if 'response_text' in data and data['response_text']:
             response_text = data['response_text']
-            # Unescape newlines and other escaped characters in response text
             response_text = response_text.replace('\\n', '\n').replace('\\"', '"').replace('\\\\', '\\')
         
         return recommendations, response_text
         
-    except (json.JSONDecodeError, ValueError, TypeError) as e:
-        # If JSON parsing fails completely, try regex extraction
+    except (json.JSONDecodeError, ValueError, TypeError):
+        # Fallback to regex extraction with improved patterns
         try:
             recommendations = []
             response_text = ""
             
-            # Extract primary_ids using regex
-            primary_id_pattern = r'"primary_id":\s*"([^"]+)"'
-            matches = re.findall(primary_id_pattern, original_message)
-            if matches:
-                recommendations = [match.strip() for match in matches if match.strip()]
+            # More robust primary_id extraction
+            primary_id_patterns = [
+                r'"primary_id":\s*"([^"]+)"',
+                r'"primary_id":"([^"]+)"',
+                r'primary_id["\']?\s*:\s*["\']([^"\']+)["\']'
+            ]
             
-            # Extract response_text using regex
+            for pattern in primary_id_patterns:
+                matches = re.findall(pattern, original_message, re.IGNORECASE)
+                if matches:
+                    recommendations = [match.strip() for match in matches if match.strip() and match.strip().lower() != 'null']
+                    break
+            
+            # More robust response_text extraction
             response_patterns = [
                 r'"response_text":\s*"(.*?)"(?=\s*[,}])',
                 r'"response_text":"(.*?)"(?=,"|\})',
+                r'response_text["\']?\s*:\s*["\']([^"\']*)["\']'
             ]
             
             for pattern in response_patterns:
-                match = re.search(pattern, original_message, re.DOTALL)
+                match = re.search(pattern, original_message, re.DOTALL | re.IGNORECASE)
                 if match:
                     response_text = match.group(1)
-                    # Clean up escape characters
                     response_text = response_text.replace('\\n', '\n').replace('\\"', '"').replace('\\\\', '\\')
                     break
             
@@ -445,7 +444,6 @@ def _parse_assistant_response(message):
         except Exception:
             pass
     
-    # Final fallback - return original message if all parsing fails
     return [], original_message
 
 def _clean_message_text(text):
