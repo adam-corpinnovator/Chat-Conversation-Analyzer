@@ -57,29 +57,25 @@ def show_chat_explorer(df):
     if time_filter:
         filtered_df = filtered_df[filtered_df['timestamp'].dt.strftime('%H:%M').str.contains(time_filter)]
     
-    # Apply opening category filter - optimized to avoid redundant computation
+    # Apply opening category filter - optimized with vectorized operations
     if opening_category_filter != "All":
-        # Pre-compute opening categories for all conversations
-        conversation_categories = {}
-        for thread_id in filtered_df['thread_id'].unique():
-            thread_messages = filtered_df[filtered_df['thread_id'] == thread_id].sort_values('timestamp')
-            first_user_message = thread_messages[thread_messages['role'] == 'user']
-            
-            if len(first_user_message) > 0:
-                category = categorize_opening_message(first_user_message.iloc[0]['message'])
-            else:
-                category = "Others"
-            
-            conversation_categories[thread_id] = category
+        # Compute opening categories for all threads using vectorized operations
+        def compute_opening_category(group):
+            first_user_message = group[group['role'] == 'user'].sort_values('timestamp').head(1)
+            if not first_user_message.empty:
+                return categorize_opening_message(first_user_message.iloc[0]['message'])
+            return "Others"
         
-        # Filter conversations that match the selected category
-        matching_thread_ids = [
-            thread_id for thread_id, category in conversation_categories.items() 
-            if category == opening_category_filter
-        ]
+        # Add opening category column to filtered_df
+        opening_categories = filtered_df.groupby('thread_id').apply(compute_opening_category)
+        filtered_df = filtered_df.merge(
+            opening_categories.reset_index().rename(columns={0: 'opening_category'}),
+            on='thread_id',
+            how='left'
+        )
         
         # Filter dataframe to only include matching conversations
-        filtered_df = filtered_df[filtered_df['thread_id'].isin(matching_thread_ids)]
+        filtered_df = filtered_df[filtered_df['opening_category'] == opening_category_filter]
 
     # Search and conversation selection
     chats = filtered_df.groupby('thread_id').first().reset_index()
@@ -493,8 +489,8 @@ def _display_product_recommendations(recommendations):
     
     # Create a container for the recommendations
     with st.container():
-        # Header
-        st.markdown(f"#### {rec_count} Product Recommendation{'s' if rec_count > 1 else ''}")
+        # Header with smaller size (level 5)
+        st.markdown(f"##### {rec_count} Product Recommendation{'s' if rec_count > 1 else ''}")
         
         # Create columns for horizontal layout
         # Calculate number of columns based on recommendations count (max 5 per row)
