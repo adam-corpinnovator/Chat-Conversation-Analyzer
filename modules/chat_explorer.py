@@ -105,6 +105,41 @@ def show_chat_explorer(df):
         # Add custom CSS for chat bubbles
         st.markdown("""
         <style>
+        /* CSS Variables for light/dark mode support */
+        :root {
+            --background-color: white;
+            --text-color: #333;
+            --secondary-text-color: #666;
+            --border-color: #e0e0e0;
+            --code-background: #f5f5f5;
+            --code-text: #2d3748;
+            --code-border: #e2e8f0;
+        }
+        
+        /* Dark mode detection using Streamlit's theme */
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --background-color: #262730;
+                --text-color: #fafafa;
+                --secondary-text-color: #a0a0a0;
+                --border-color: #404040;
+                --code-background: #1e1e1e;
+                --code-text: #e2e8f0;
+                --code-border: #404040;
+            }
+        }
+        
+        /* Streamlit dark mode override */
+        [data-theme="dark"] {
+            --background-color: #262730;
+            --text-color: #fafafa;
+            --secondary-text-color: #a0a0a0;
+            --border-color: #404040;
+            --code-background: #1e1e1e;
+            --code-text: #e2e8f0;
+            --code-border: #404040;
+        }
+        
         .user-message {
             background: #007bff;
             color: white;
@@ -202,65 +237,146 @@ def show_chat_explorer(df):
             margin-top: 5px;
         }
         
-        .product-card {
-            background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-            border: 1px solid #dee2e6;
+        .product-recommendations {
+            margin: 15px 50px 15px 0;
+            background: linear-gradient(135deg, #f8f9fb 0%, #f1f4f8 100%);
+            border: 1px solid #e2e8f0;
             border-radius: 12px;
-            padding: 15px;
-            margin: 10px 0;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            padding: 16px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
         }
         
-        .product-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-        }
-        
-        .product-card-header {
+        .product-recommendations-header {
             display: flex;
             align-items: center;
-            margin-bottom: 8px;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #e2e8f0;
         }
         
-        .product-icon {
-            font-size: 16px;
+        .product-recommendations-icon {
+            font-size: 18px;
             margin-right: 8px;
         }
         
-        .product-title {
+        .product-recommendations-title {
             font-weight: 600;
-            color: #495057;
+            color: #334155;
             font-size: 14px;
+            margin: 0;
+        }
+        
+        .product-cards-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            align-items: stretch;
+        }
+        
+        .product-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px 12px;
+            flex: 1;
+            min-width: 180px;
+            max-width: 250px;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.05);
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+        }
+        
+        .product-card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+            border-color: #007bff;
+        }
+        
+        .product-card-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            gap: 8px;
+        }
+        
+        .product-info {
+            display: flex;
+            align-items: center;
+            flex: 1;
+            min-width: 0;
+        }
+        
+        .product-icon {
+            font-size: 12px;
+            margin-right: 6px;
+            opacity: 0.7;
+            flex-shrink: 0;
         }
         
         .product-id {
-            font-family: 'Monaco', 'Consolas', monospace;
-            background: #f8f9fa;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 12px;
-            color: #6c757d;
-            margin: 5px 0;
+            font-family: 'SF Mono', 'Monaco', 'Consolas', monospace;
+            background: #f1f5f9;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 10px;
+            color: #475569;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            flex: 1;
         }
         
         .product-link {
-            display: inline-block;
+            display: inline-flex;
+            align-items: center;
             background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
             color: white;
-            padding: 6px 12px;
-            border-radius: 6px;
+            padding: 4px 8px;
+            border-radius: 4px;
             text-decoration: none;
-            font-size: 12px;
+            font-size: 10px;
             font-weight: 500;
             transition: all 0.2s ease;
+            white-space: nowrap;
+            flex-shrink: 0;
         }
         
         .product-link:hover {
             transform: translateY(-1px);
-            box-shadow: 0 3px 8px rgba(0,123,255,0.3);
+            box-shadow: 0 2px 6px rgba(0,123,255,0.3);
             text-decoration: none;
             color: white;
+            background: linear-gradient(135deg, #0056b3 0%, #004085 100%);
+        }
+        
+        .product-link-icon {
+            font-size: 8px;
+            margin-right: 3px;
+        }
+        
+        /* Responsive design for smaller screens */
+        @media (max-width: 768px) {
+            .product-cards-grid {
+                flex-direction: column;
+            }
+            
+            .product-card {
+                max-width: none;
+            }
+            
+            .product-card-content {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .product-link {
+                align-self: stretch;
+                justify-content: center;
+            }
         }
         </style>
         """, unsafe_allow_html=True)
@@ -333,37 +449,65 @@ def _display_assistant_message(message, time_str, relative_time, row):
         _add_translation_section(response_text or message, f"assistant_trans_{row.name}")
 
 def _display_product_recommendations(recommendations):
-    """Display product recommendations as separate cards"""
+    """Display product recommendations as compact cards using native Streamlit components"""
     if not recommendations:
         return
     
     rec_count = len(recommendations)
-    rec_icon = "🎁" if rec_count == 1 else "🛍️"
     
-    st.markdown(f"""
-    <div style="margin: 15px 50px 15px 0;">
-        <div style="font-size: 14px; font-weight: 600; color: #495057; margin-bottom: 10px;">
-            {rec_icon} {rec_count} Product Recommendation{'s' if rec_count > 1 else ''}
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    for i, product_id in enumerate(recommendations):
-        if product_id:  # Only display if product_id is not empty
-            product_link = f"https://www.faces.ae/en/search?q={product_id}&lang=en_AE"
-            
-            st.markdown(f"""
-            <div class="product-card">
-                <div class="product-card-header">
-                    <span class="product-icon">🛍️</span>
-                    <span class="product-title">Product Recommendation {i + 1}</span>
-                </div>
-                <div class="product-id">ID: {product_id}</div>
-                <a href="{product_link}" target="_blank" class="product-link">
-                    🔗 View on Faces.ae
-                </a>
-            </div>
-            """, unsafe_allow_html=True)
+    # Create a container for the recommendations
+    with st.container():
+        # Header
+        st.markdown(f"### {rec_count} Product Recommendation{'s' if rec_count > 1 else ''}")
+        
+        # Create columns for horizontal layout
+        # Calculate number of columns based on recommendations count (max 5 per row)
+        cols_per_row = min(len(recommendations), 5)
+        cols = st.columns(cols_per_row)
+        
+        for i, product_id in enumerate(recommendations):
+            if product_id:  # Only display if product_id is not empty
+                with cols[i % cols_per_row]:
+                    # Create a card-like appearance using markdown and styling
+                    product_link = f"https://www.faces.ae/en/search?q={product_id}&lang=en_AE"
+                    
+                    # Use a combination of markdown and button for the card
+                    st.markdown(f"""
+                    <div style="
+                        background: var(--background-color, white);
+                        border: 1px solid var(--border-color, #e0e0e0);
+                        border-radius: 8px;
+                        padding: 12px;
+                        margin-bottom: 8px;
+                        text-align: center;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                        color: var(--text-color, #333);
+                    ">
+                        <div style="
+                            font-size: 10px;
+                            color: var(--secondary-text-color, #666);
+                            margin-bottom: 4px;
+                            font-weight: 500;
+                            text-transform: uppercase;
+                            letter-spacing: 0.5px;
+                        ">Product ID</div>
+                        <div style="
+                            font-family: 'SF Mono', Monaco, Consolas, monospace;
+                            font-size: 11px;
+                            background: var(--code-background, #f5f5f5);
+                            color: var(--code-text, #2d3748);
+                            padding: 6px 8px;
+                            border-radius: 4px;
+                            margin-bottom: 8px;
+                            word-break: break-all;
+                            font-weight: 600;
+                            border: 1px solid var(--code-border, #e2e8f0);
+                        ">{product_id}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    # Use native Streamlit link button
+                    st.link_button("🔗 View Product", product_link, use_container_width=True)
 
 def _parse_assistant_response(message):
     """Parse JSON from assistant response to extract recommendations and response text"""
