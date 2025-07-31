@@ -4,7 +4,6 @@ Utility functions for the Layla Conversation Analyzer
 import re
 import pandas as pd
 from deep_translator import GoogleTranslator
-import pandas as pd
 
 def is_arabic(text):
     """Simple check for Arabic characters"""
@@ -118,25 +117,5 @@ def categorize_opening_message(message):
     for pattern in summarization_patterns:
         if re.search(pattern, clean_message, re.IGNORECASE):
             return "Product Summarization"
-    
-    return "Others"
-
-def get_conversation_opening_category(df, thread_id):
-    """
-    Get the opening message category for a specific conversation thread.
-    
-    Args:
-        df (pd.DataFrame): The conversation dataframe
-        thread_id (str): The thread ID to analyze
-        
-    Returns:
-        str: Category of the opening message
-    """
-    # Get the first user message in the conversation
-    thread_messages = df[df['thread_id'] == thread_id].sort_values('timestamp')
-    first_user_message = thread_messages[thread_messages['role'] == 'user'].iloc[0] if len(thread_messages[thread_messages['role'] == 'user']) > 0 else None
-    
-    if first_user_message is not None:
-        return categorize_opening_message(first_user_message['message'])
     
     return "Others"
