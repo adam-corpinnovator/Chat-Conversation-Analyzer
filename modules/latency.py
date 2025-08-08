@@ -342,47 +342,7 @@ def show_latency_dashboard(df: pd.DataFrame):
 
     st.divider()
 
-    # Which prompts take long to answer?
-    st.subheader("Prompts that took the longest to answer")
-    colp1, colp2 = st.columns([3, 1])
-    with colp1:
-        search_term = st.text_input("Filter by keyword in user prompt", key="latency_search_term")
-    with colp2:
-        min_latency_s = st.number_input("Min latency to include (s)", value=max(critical_threshold_s, 5), min_value=0, key="latency_min_latency")
-
-    prompt_df = lat_df.copy()
-    if search_term:
-        mask = prompt_df["user_message"].str.contains(str(search_term), case=False, na=False)
-        prompt_df = prompt_df[mask]
-    if min_latency_s > 0:
-        prompt_df = prompt_df[prompt_df["latency_seconds"] >= float(min_latency_s)]
-
-    if prompt_df.empty:
-        st.info("No prompts match the current filters.")
-    else:
-        st.dataframe(
-            prompt_df[
-                [
-                    "thread_id",
-                    "region",
-                    "user_timestamp",
-                    "assistant_timestamp",
-                    "latency_seconds",
-                    "user_word_len",
-                    "user_char_len",
-                    "user_message",
-                ]
-            ]
-            .sort_values("latency_seconds", ascending=False)
-            .assign(latency=lambda d: d["latency_seconds"].map(_format_seconds))
-            .drop(columns=["latency_seconds"]),
-            use_container_width=True,
-            hide_index=True,
-        )
-        st.caption("Use the filters to find slow prompts. Latency is the time the assistant took to reply to the shown user message.")
-
-    # Correlation: avg response time vs # messages per conversation
-    st.divider()
+    # Response time vs. conversation length (with outlier handling and explanation)
     st.subheader("Response time vs. conversation length")
     # Per thread metrics
     per_thread_counts = df_f.groupby("thread_id").size().rename("messages_count").reset_index()
