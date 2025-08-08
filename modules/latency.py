@@ -138,7 +138,8 @@ def _get_translator():
     if key not in st.session_state:
         try:
             st.session_state[key] = GoogleTranslator(source="auto", target="en")
-        except Exception:
+        except Exception as e:
+            logging.error(f"Failed to create GoogleTranslator: {type(e).__name__}: {e}")
             st.session_state[key] = None
     return st.session_state[key]
 
