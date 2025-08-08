@@ -6,6 +6,8 @@ import numpy as np
 import streamlit as st
 import plotly.express as px
 from datetime import timedelta
+import json
+from deep_translator import GoogleTranslator
 
 
 def _compute_assistant_latencies(df: pd.DataFrame) -> pd.DataFrame:
@@ -99,6 +101,97 @@ def _format_seconds(s: float) -> str:
         return f"{mins}m {secs}s"
     hours, mins = divmod(mins, 60)
     return f"{hours}h {mins}m {secs}s"
+
+
+# Helpers for cleaning and translation
+
+def _clean_assistant_message(msg) -> str:
+    """Extract a readable text from assistant message.
+    If JSON, prefer the 'response_text' field; otherwise return the raw string.
+    """
+    if msg is None:
+        return ""
+    try:
+        # If it's already a dict-like JSON string, parse it
+        obj = json.loads(str(msg))
+        if isinstance(obj, dict):
+            # Prefer common text fields
+            if obj.get("response_text"):
+                return str(obj["response_text"]).strip()
+            # Fallback: join all short text-like values
+            texts = []
+            for k, v in obj.items():
+                if isinstance(v, str) and len(v) > 0:
+                    texts.append(v)
+            if texts:
+                return "\n\n".join(texts).strip()
+        # If it's a list or something else, just stringify
+        return str(obj)
+    except Exception:
+        # Not JSON, return as-is
+        return str(msg)
+
+
+def _get_translator():
+    """Create or reuse a translator that auto-detects source language and translates to English."""
+    key = "_latency_translator_en"
+    if key not in st.session_state:
+        try:
+            st.session_state[key] = GoogleTranslator(source="auto", target="en")
+        except Exception:
+            st.session_state[key] = None
+    return st.session_state[key]
+
+
+def _get_translation_cache():
+    """A simple in-memory cache for translations in this session."""
+    key = "_latency_translation_cache"
+    if key not in st.session_state:
+        st.session_state[key] = {}
+    return st.session_state[key]
+
+
+def _translate_series(series: pd.Series, enabled: bool) -> pd.Series:
+    if not enabled:
+        return series
+    translator = _get_translator()
+    if translator is None:
+        return series
+    cache = _get_translation_cache()
+
+    def _t(x):
+        if x is None or (isinstance(x, float) and pd.isna(x)):
+            return x
+        s = str(x)
+        if not s.strip():
+            return s
+        if s in cache:
+            return cache[s]
+        try:
+            translated = translator.translate(s)
+            cache[s] = translated
+            return translated
+        except Exception:
+            return s
+
+    return series.apply(_t)
+
+
+def _translate_text(s: str, enabled: bool) -> str:
+    if not enabled or not s:
+        return s
+    translator = _get_translator()
+    if translator is None:
+        return s
+    cache = _get_translation_cache()
+    if s in cache:
+        return cache[s]
+    try:
+        translated = translator.translate(str(s))
+        cache[s] = translated
+        return translated
+    except Exception:
+        return s
 
 
 def show_latency_dashboard(df: pd.DataFrame):
