@@ -292,42 +292,109 @@ def show_latency_dashboard(df: pd.DataFrame):
         st.write(_format_seconds(max_row["latency_seconds"]))
         st.caption(f"Thread: {max_row['thread_id']} | {max_row['assistant_timestamp']}")
         st.markdown(
-            f"- User: {max_row['user_message'][:500]}\n\n- Assistant: {str(max_row['assistant_message'])[:500]}"
+            f"- User: {str(max_row['user_message'])[:500]}\n\n- Assistant: {str(max_row['assistant_message'])[:500]}"
         )
     with colx2:
         st.markdown("**Shortest time to answer**")
         st.write(_format_seconds(min_row["latency_seconds"]))
         st.caption(f"Thread: {min_row['thread_id']} | {min_row['assistant_timestamp']}")
         st.markdown(
-            f"- User: {min_row['user_message'][:500]}\n\n- Assistant: {str(min_row['assistant_message'])[:500]}"
+            f"- User: {str(min_row['user_message'])[:500]}\n\n- Assistant: {str(min_row['assistant_message'])[:500]}"
         )
 
     st.divider()
 
-    # Critical cases
-    st.subheader("Critical cases (slow replies)")
-    critical = lat_df[lat_df["latency_seconds"] >= critical_threshold_s].copy()
-    critical = critical.sort_values("latency_seconds", ascending=False)
+    # Slow replies explorer (merged: Critical cases + Longest prompts)
+    st.subheader("Slow replies explorer")
+    st.markdown(
+        "This table helps you find and inspect the slowest assistant replies. "
+        "Use the filters to either: (a) strictly show only replies slower than your critical threshold, or (b) simply rank by latency. "
+        "You can also search within the user's prompt, pick columns to display, and limit the number of rows to keep things fast."
+    )
 
-    if critical.empty:
-        st.success("No replies exceed the critical threshold in the selected range.")
+    # Controls
+    colsr1, colsr2, colsr3, colsr4 = st.columns([2, 1, 1, 1])
+    with colsr1:
+        slow_search = st.text_input("Search in user prompt", key="latency_slow_search")
+    with colsr2:
+        slow_min_latency = st.number_input(
+            "Min latency (s)", value=max(critical_threshold_s, 5), min_value=0, step=1, key="latency_slow_min_latency"
+        )
+    with colsr3:
+        slow_only_critical = st.checkbox(
+            "Only show ≥ critical threshold", value=True, key="latency_slow_only_critical"
+        )
+    with colsr4:
+        slow_top_n = st.number_input("Rows to show", min_value=10, max_value=1000, value=100, step=10, key="latency_slow_top_n")
+
+    st.markdown("Choose columns to show:")
+    scol1, scol2, scol3 = st.columns(3)
+    with scol1:
+        sopt_region = st.checkbox("Region", value=True, key="latency_slow_opt_region")
+        sopt_user_ts = st.checkbox("User timestamp", value=True, key="latency_slow_opt_user_ts")
+    with scol2:
+        sopt_assistant_ts = st.checkbox("Assistant timestamp", value=False, key="latency_slow_opt_assistant_ts")
+        sopt_user_len = st.checkbox("User word count", value=False, key="latency_slow_opt_user_len")
+    with scol3:
+        sopt_user_msg = st.checkbox("User message", value=True, key="latency_slow_opt_user_msg")
+        sopt_assistant_msg = st.checkbox("Assistant message", value=True, key="latency_slow_opt_assistant_msg")
+
+    # Build unified filtered dataframe
+    slow_df = lat_df.copy()
+    if slow_only_critical:
+        slow_df = slow_df[slow_df["latency_seconds"] >= float(critical_threshold_s)]
+    if slow_min_latency and float(slow_min_latency) > 0:
+        slow_df = slow_df[slow_df["latency_seconds"] >= float(slow_min_latency)]
+    if slow_search:
+        slow_df = slow_df[slow_df["user_message"].str.contains(str(slow_search), case=False, na=False)]
+
+    if slow_df.empty:
+        st.info("No rows match the current filters.")
     else:
-        top_n = st.slider("Show top N slowest replies", min_value=5, max_value=100, value=20, step=5, key="latency_top_n")
-        st.dataframe(
-            critical
-            .assign(latency=lambda d: d["latency_seconds"].map(_format_seconds))
-            .loc[:, [
-                "latency",
-                "thread_id",
-                "region",
-                "user_timestamp",
-                "assistant_timestamp",
-                "user_word_len",
-                "user_message",
-            ]]
-            .head(top_n),
-            use_container_width=True,
-            hide_index=True,
+        display_cols = ["latency", "thread_id"]
+        if sopt_region:
+            display_cols.append("region")
+        if sopt_user_ts:
+            display_cols.append("user_timestamp")
+        if sopt_assistant_ts:
+            display_cols.append("assistant_timestamp")
+        if sopt_user_len:
+            display_cols.append("user_word_len")
+        if sopt_user_msg:
+            display_cols.append("user_message")
+        if sopt_assistant_msg:
+            display_cols.append("assistant_message_clean")
+
+        slow_display = (
+            slow_df.assign(latency=lambda d: d["latency_seconds"].map(_format_seconds))
+            .sort_values("latency_seconds", ascending=False)
+            .head(int(slow_top_n))
+            .loc[:, display_cols]
+            .rename(
+                columns={
+                    "latency": "Latency",
+                    "thread_id": "Thread",
+                    "region": "Region",
+                    "user_timestamp": "User time",
+                    "assistant_timestamp": "Assistant time",
+                    "user_word_len": "User words",
+                    "user_message": "User message",
+                    "assistant_message_clean": "Assistant message",
+                }
+            )
+        )
+
+        # Translate only the displayed rows (if enabled)
+        if translate_enabled:
+            if "User message" in slow_display.columns:
+                slow_display["User message"] = _translate_series(slow_display["User message"], True)
+            if "Assistant message" in slow_display.columns:
+                slow_display["Assistant message"] = _translate_series(slow_display["Assistant message"], True)
+
+        st.dataframe(slow_display, use_container_width=True, hide_index=True)
+        st.caption(
+            "Latency = time from user message to next assistant reply. "
+            "If the toggle is on, only replies slower than your critical threshold are shown; otherwise it's just the slowest replies."
         )
 
     # Distribution & Trends
