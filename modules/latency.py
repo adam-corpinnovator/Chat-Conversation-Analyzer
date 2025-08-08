@@ -237,6 +237,13 @@ def show_latency_dashboard(df: pd.DataFrame):
     with colf4:
         show_advanced = st.checkbox("Show advanced charts", value=True, key="latency_show_advanced")
 
+    # Global display options
+    cold1, cold2 = st.columns([2, 2])
+    with cold1:
+        translate_enabled = st.checkbox("Translate messages to English", value=False, key="latency_translate_en_all")
+    with cold2:
+        clean_json_enabled = st.checkbox("Clean assistant JSON to plain text", value=True, key="latency_clean_json_all")
+
     # Apply filters
     if isinstance(date_range, (list, tuple)) and len(date_range) == 2:
         start_date, end_date = pd.to_datetime(date_range[0]), pd.to_datetime(date_range[1]) + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
@@ -253,6 +260,12 @@ def show_latency_dashboard(df: pd.DataFrame):
     if lat_df.empty:
         st.info("No assistant replies found to compute latency.")
         return
+
+    # Prepare cleaned assistant message column (for display)
+    if clean_json_enabled:
+        lat_df["assistant_message_clean"] = lat_df["assistant_message"].apply(_clean_assistant_message)
+    else:
+        lat_df["assistant_message_clean"] = lat_df["assistant_message"].astype(str)
 
     # Key metrics
     avg_s = lat_df["latency_seconds"].mean()
@@ -344,9 +357,17 @@ def show_latency_dashboard(df: pd.DataFrame):
 
     # Response time vs. conversation length (with outlier handling and explanation)
     st.subheader("Response time vs. conversation length")
+    st.markdown(
+        "This chart checks if longer conversations tend to have slower or faster replies. "
+        "Each dot is one conversation (thread). The correlation number summarizes the linear relationship: "
+        "-1 = strong negative (faster replies with longer chats), 0 = no clear link, +1 = strong positive."
+    )
+
     # Per thread metrics
     per_thread_counts = df_f.groupby("thread_id").size().rename("messages_count").reset_index()
-    per_thread_assistant_lat = lat_df.groupby("thread_id")["latency_seconds"].mean().rename("avg_latency_seconds").reset_index()
+    per_thread_assistant_lat = (
+        lat_df.groupby("thread_id")["latency_seconds"].mean().rename("avg_latency_seconds").reset_index()
+    )
     per_thread = per_thread_counts.merge(per_thread_assistant_lat, on="thread_id", how="left")
     per_thread = per_thread.dropna(subset=["avg_latency_seconds"])  # keep threads with at least one assistant reply
 
@@ -354,11 +375,34 @@ def show_latency_dashboard(df: pd.DataFrame):
         st.info("Not enough data to compute per-thread correlation.")
         return
 
-    corr = per_thread[["messages_count", "avg_latency_seconds"]].corr().iloc[0, 1]
+    col_out1, col_out2 = st.columns([2, 2])
+    with col_out1:
+        exclude_outliers = st.checkbox("Exclude latency outliers (IQR)", value=True, key="latency_corr_exclude_outliers")
+    with col_out2:
+        st.caption("Outliers are points outside 1.5×IQR for average latency.")
+
+    plot_df = per_thread.copy()
+    removed = 0
+    if exclude_outliers and not plot_df.empty:
+        q1 = plot_df["avg_latency_seconds"].quantile(0.25)
+        q3 = plot_df["avg_latency_seconds"].quantile(0.75)
+        iqr = q3 - q1
+        lower = q1 - 1.5 * iqr
+        upper = q3 + 1.5 * iqr
+        mask = (plot_df["avg_latency_seconds"] >= lower) & (plot_df["avg_latency_seconds"] <= upper)
+        removed = int((~mask).sum())
+        plot_df = plot_df[mask]
+
+    if plot_df.empty:
+        st.info("All points considered outliers under current rule. Try turning off the outlier filter.")
+        return
+
+    corr = plot_df[["messages_count", "avg_latency_seconds"]].corr().iloc[0, 1]
+
     colr1, colr2 = st.columns([3, 1])
     with colr1:
         fig3 = px.scatter(
-            per_thread,
+            plot_df,
             x="messages_count",
             y="avg_latency_seconds",
             hover_name="thread_id",
@@ -367,12 +411,12 @@ def show_latency_dashboard(df: pd.DataFrame):
         )
         st.plotly_chart(fig3, use_container_width=True)
         st.caption(
-            "Each dot is a conversation (thread). X = number of messages; Y = average assistant reply time (seconds). "
-            "Downward tendency suggests faster replies may correlate with longer conversations."
+            f"Using {len(plot_df)} conversations (removed {removed} outliers). "
+            "A downward pattern suggests faster replies correlate with longer conversations."
         )
     with colr2:
         st.metric("Pearson correlation", f"{corr:.3f}")
-        st.caption("Correlation ranges -1 to 1. Values near 0 mean little linear relationship.")
+        st.caption("Closer to -1 or +1 means a stronger relationship. Values near 0 mean little to no linear relationship.")
 
     # Download helper
     st.download_button(
