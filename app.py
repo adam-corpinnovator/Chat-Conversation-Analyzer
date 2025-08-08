@@ -9,6 +9,7 @@ from modules.utils import is_arabic, translate_text
 from modules.chat_explorer import show_chat_explorer
 from modules.search import show_keyword_search
 from modules.analytics import show_analytics_dashboard
+from modules.latency import show_latency_dashboard
 
 def main():
     st.set_page_config(page_title="Layla Conversation Analyzer", layout="wide")
@@ -108,7 +109,7 @@ def main():
     df = df[df['timestamp'] >= min_date]
 
     # Create tabs for different sections
-    tab1, tab2, tab3 = st.tabs(["Analytics Dashboard", "Chat Explorer", "Keyword Search"])
+    tab1, tab2, tab3, tab4 = st.tabs(["Analytics Dashboard", "Chat Explorer", "Keyword Search", "Response Latency"]) 
 
     with tab1:
         show_analytics_dashboard(df)
@@ -118,6 +119,9 @@ def main():
 
     with tab3:
         show_keyword_search(df)
+
+    with tab4:
+        show_latency_dashboard(df)
 
 if __name__ == "__main__":
     main()
