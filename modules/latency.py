@@ -190,7 +190,8 @@ def _translate_text(s: str, enabled: bool) -> str:
         translated = translator.translate(str(s))
         cache[s] = translated
         return translated
-    except Exception:
+    except Exception as e:
+        st.warning(f"Translation failed: {e}")
         return s
 
 
