@@ -7,6 +7,7 @@ import streamlit as st
 import plotly.express as px
 from datetime import timedelta
 import json
+import logging
 from deep_translator import GoogleTranslator
 
 
@@ -231,7 +232,7 @@ def show_latency_dashboard(df: pd.DataFrame):
             "Critical latency threshold (seconds)",
             min_value=1,
             max_value=3600,
-            value=30,
+            value=15,
             step=1,
             help="Assistant replies slower than this are flagged as critical.",
             key="latency_critical_threshold",
@@ -256,7 +257,7 @@ def show_latency_dashboard(df: pd.DataFrame):
     if region_filter != "All":
         df_f = df_f[df_f["region"] == region_filter]
 
-    # Compute latencies
+    # Compute latencies for the currently selected filters (date + region)
     lat_df = _compute_assistant_latencies(df_f)
 
     if lat_df.empty:
@@ -269,20 +270,94 @@ def show_latency_dashboard(df: pd.DataFrame):
     else:
         lat_df["assistant_message_clean"] = lat_df["assistant_message"].astype(str)
 
-    # Key metrics
+    # Key metrics (for the current filtered period)
     avg_s = lat_df["latency_seconds"].mean()
     median_s = lat_df["latency_seconds"].median()
     p95_s = lat_df["latency_seconds"].quantile(0.95)
     min_row = lat_df.loc[lat_df["latency_seconds"].idxmin()]
     max_row = lat_df.loc[lat_df["latency_seconds"].idxmax()]
 
+    # Week-over-Week delta for metrics (green if improved i.e., lower)
+    # Compute using the currently selected filters (date range + region) so it reflects
+    # "last 7 days vs previous 7 days" relative to the end of the selected date range.
+    try:
+        # Use the already filtered per-answer latency DataFrame
+        lat_df_trend = lat_df.copy()
+        avg_delta_val = None  # seconds
+        med_delta_val = None  # seconds
+        p95_delta_val = None  # seconds
+        if not lat_df_trend.empty and lat_df_trend["assistant_timestamp"].notna().any():
+            end_ts = lat_df_trend["assistant_timestamp"].max()
+            curr_start = end_ts - pd.Timedelta(days=7)
+            prev_start = end_ts - pd.Timedelta(days=14)
+            curr_mask = lat_df_trend["assistant_timestamp"] > curr_start
+            prev_mask = (lat_df_trend["assistant_timestamp"] > prev_start) & (lat_df_trend["assistant_timestamp"] <= curr_start)
+            curr_avg = lat_df_trend.loc[curr_mask, "latency_seconds"].mean()
+            prev_avg = lat_df_trend.loc[prev_mask, "latency_seconds"].mean()
+            if pd.notna(curr_avg) and pd.notna(prev_avg):
+                # Absolute change in seconds; negative means improved
+                avg_delta_val = curr_avg - prev_avg
+            curr_med = lat_df_trend.loc[curr_mask, "latency_seconds"].median()
+            prev_med = lat_df_trend.loc[prev_mask, "latency_seconds"].median()
+            if pd.notna(curr_med) and pd.notna(prev_med):
+                med_delta_val = curr_med - prev_med
+            # Guard for quantile with possibly empty set
+            curr_p95 = lat_df_trend.loc[curr_mask, "latency_seconds"].quantile(0.95)
+            prev_p95 = lat_df_trend.loc[prev_mask, "latency_seconds"].quantile(0.95)
+            if pd.notna(curr_p95) and pd.notna(prev_p95):
+                p95_delta_val = curr_p95 - prev_p95
+    except Exception as e:
+        logging.warning(f"Failed to compute WoW delta for latency: {type(e).__name__}: {e}")
+        avg_delta_val = None
+        med_delta_val = None
+        p95_delta_val = None
+
     colm1, colm2, colm3, colm4 = st.columns(4)
     with colm1:
-        st.metric("Average time per answer", _format_seconds(avg_s))
+        if avg_delta_val is None:
+            st.metric(
+                "Average time per answer",
+                _format_seconds(avg_s),
+                help="Change indicator unavailable (not enough data for previous 7 days).",
+            )
+        else:
+            st.metric(
+                "Average time per answer",
+                _format_seconds(avg_s),
+                delta=f"{avg_delta_val:.1f} s",
+                delta_color="inverse",  # lower latency (negative delta) is good -> green
+                help="Week-over-week change vs previous 7 days (based on selected date range and region).",
+            )
     with colm2:
-        st.metric("Median time per answer", _format_seconds(median_s))
+        if med_delta_val is None:
+            st.metric(
+                "Median time per answer",
+                _format_seconds(median_s),
+                help="Change indicator unavailable (not enough data for previous 7 days).",
+            )
+        else:
+            st.metric(
+                "Median time per answer",
+                _format_seconds(median_s),
+                delta=f"{med_delta_val:.1f} s",
+                delta_color="inverse",
+                help="Week-over-week change vs previous 7 days (based on selected date range and region).",
+            )
     with colm3:
-        st.metric("95th percentile", _format_seconds(p95_s))
+        if p95_delta_val is None:
+            st.metric(
+                "95th percentile",
+                _format_seconds(p95_s),
+                help="Change indicator unavailable (not enough data for previous 7 days).",
+            )
+        else:
+            st.metric(
+                "95th percentile",
+                _format_seconds(p95_s),
+                delta=f"{p95_delta_val:.1f} s",
+                delta_color="inverse",
+                help="Week-over-week change vs previous 7 days (based on selected date range and region).",
+            )
     with colm4:
         st.metric("Total answers analyzed", f"{len(lat_df):,}")
 

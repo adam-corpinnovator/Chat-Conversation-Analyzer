@@ -188,7 +188,7 @@ def show_opening_categories_analysis(analytics_df):
         how='left'
     ).fillna({'category': 'Others'})
     
-    # Count conversations by category
+    # Count conversations by category (for the currently filtered date range)
     category_counts = category_df['category'].value_counts().reset_index()
     category_counts.columns = ['Category', 'Count']
     
@@ -196,6 +196,32 @@ def show_opening_categories_analysis(analytics_df):
     total_conversations = len(category_df)
     category_counts['Percentage'] = (category_counts['Count'] / total_conversations * 100).round(1)
     
+    # Compute Week-over-Week absolute deltas by category using first user message timestamp per thread,
+    # anchored to the end of the selected date range and computed within the currently filtered data.
+    try:
+        # Use the currently filtered analytics_df as the base
+        base_df = analytics_df.copy()
+        # Extract first user message per thread with timestamp within the filtered range
+        first_users_all = (
+            base_df[base_df['role'] == 'user']
+            .sort_values('timestamp')
+            .groupby('thread_id')
+            .first()
+            .reset_index()[['thread_id', 'message', 'timestamp']]
+        )
+        first_users_all['category'] = first_users_all['message'].apply(categorize_opening_message)
+        # Define windows relative to the end of the selected date range
+        end_ts = base_df['timestamp'].max()
+        curr_start = end_ts - pd.Timedelta(days=7)
+        prev_start = end_ts - pd.Timedelta(days=14)
+        curr_mask = first_users_all['timestamp'] > curr_start
+        prev_mask = (first_users_all['timestamp'] > prev_start) & (first_users_all['timestamp'] <= curr_start)
+        curr_counts = first_users_all.loc[curr_mask, 'category'].value_counts()
+        prev_counts = first_users_all.loc[prev_mask, 'category'].value_counts()
+        wow_delta_counts = (curr_counts - prev_counts).to_dict()
+    except Exception:
+        wow_delta_counts = {}
+
     # Display metrics
     col1, col2, col3, col4 = st.columns(4)
     categories = ['Fragrance Help', 'Skincare Routine', 'Product Summarization', 'Others']
@@ -208,7 +234,17 @@ def show_opening_categories_analysis(analytics_df):
         percentage = percentage[0] if len(percentage) > 0 else 0
         
         with cols[i]:
-            st.metric(category, f"{count} ({percentage}%)")
+            delta_val = wow_delta_counts.get(category, None)
+            if delta_val is None or pd.isna(delta_val):
+                st.metric(category, f"{count} ({percentage}%)")
+            else:
+                st.metric(
+                    category,
+                    f"{count} ({percentage}%)",
+                    delta=f"{int(delta_val):+d}",
+                    delta_color="normal",  # up is green, down is red
+                    help="Week-over-week absolute change based on conversation openings (first user message).",
+                )
     
     # Create visualizations
     col1, col2 = st.columns(2)
