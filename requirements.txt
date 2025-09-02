@@ -6,3 +6,8 @@ streamlit-authenticator
 pyyaml
 st-supabase-connection
 supabase
+openai
+langchain
+langchain-openai
+langchain-experimental
+tabulate
