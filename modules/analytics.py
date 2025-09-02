@@ -164,7 +164,21 @@ def show_key_metrics(analytics_df):
 def show_opening_categories_analysis(analytics_df):
     """Display conversation opening categories analysis"""
     st.subheader("📝 Conversation Opening Categories")
-    
+
+    st.markdown(
+    """
+    **What are these categories?**  
+    Conversations are automatically categorized based on the first user message. This helps understand what topics users are most interested in when starting a conversation.
+    """
+    )
+
+    st.markdown(
+    """
+    **Understanding the Delta (Week-over-Week Change):**  
+    The delta compares the number of conversations in each category from the most recent 7 days to the previous 7 days.
+    """
+    )
+
     # Get unique conversations and their opening categories - fixed to avoid pandas warning
     conversations = analytics_df.groupby('thread_id').first().reset_index()
     
@@ -219,8 +233,20 @@ def show_opening_categories_analysis(analytics_df):
         curr_counts = first_users_all.loc[curr_mask, 'category'].value_counts()
         prev_counts = first_users_all.loc[prev_mask, 'category'].value_counts()
         wow_delta_counts = (curr_counts - prev_counts).to_dict()
+
+        # Calculate percentage deltas
+        wow_delta_percent = {}
+        for cat in set(curr_counts.index).union(set(prev_counts.index)):
+            prev = prev_counts.get(cat, 0)
+            curr = curr_counts.get(cat, 0)
+            if prev > 0:
+                percent = ((curr - prev) / prev) * 100
+                wow_delta_percent[cat] = percent
+            else:
+                wow_delta_percent[cat] = None
     except Exception:
         wow_delta_counts = {}
+        wow_delta_percent = {}
 
     # Display metrics
     col1, col2, col3, col4 = st.columns(4)
@@ -238,12 +264,16 @@ def show_opening_categories_analysis(analytics_df):
             if delta_val is None or pd.isna(delta_val):
                 st.metric(category, f"{count} ({percentage}%)")
             else:
+                percent_val = wow_delta_percent.get(category, None)
+                delta_str = f"{int(delta_val):+d}"
+                if percent_val is not None:
+                    delta_str += f" ({percent_val:+.1f}%)"
                 st.metric(
                     category,
                     f"{count} ({percentage}%)",
-                    delta=f"{int(delta_val):+d}",
+                    delta=delta_str,
                     delta_color="normal",  # up is green, down is red
-                    help="Week-over-week absolute change based on conversation openings (first user message).",
+                    help="Week-over-week change: absolute and percentage based on conversation openings (first user message).",
                 )
     
     # Create visualizations
