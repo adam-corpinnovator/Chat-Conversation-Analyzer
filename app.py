@@ -3,13 +3,20 @@ import pandas as pd
 from datetime import datetime
 
 # Import custom modules
-from modules.auth import load_auth_config, create_authenticator, handle_authentication, show_authentication_ui
+from modules.auth import (
+    load_auth_config,
+    create_authenticator,
+    handle_authentication,
+    show_authentication_ui,
+)
 from modules.data_loader import load_data_from_url, load_data_from_upload
 from modules.utils import is_arabic, translate_text
 from modules.chat_explorer import show_chat_explorer
 from modules.search import show_keyword_search
 from modules.analytics import show_analytics_dashboard
 from modules.latency import show_latency_dashboard
+from modules.intelligence import show_intelligence_chat
+
 
 def main():
     st.set_page_config(page_title="Layla Conversation Analyzer", layout="wide")
@@ -39,7 +46,7 @@ def main():
     
     with col2:
         # Logout button
-        authenticator.logout('🚪 Logout', 'main')
+        authenticator.logout("🚪 Logout", "main")
 
     # Data source selection
     st.divider()
@@ -74,7 +81,7 @@ def main():
         uploaded_file = st.file_uploader(
             "Choose a CSV file",
             type="csv",
-            help="Upload a CSV file with columns: thread_id, timestamp, role, message, region"
+            help="Upload a CSV file with columns: thread_id, timestamp, role, message, region",
         )
         
         if uploaded_file is not None:
@@ -109,7 +116,15 @@ def main():
     df = df[df['timestamp'] >= min_date]
 
     # Create tabs for different sections
-    tab1, tab2, tab3, tab4 = st.tabs(["Analytics Dashboard", "Chat Explorer", "Keyword Search", "Response Latency"]) 
+    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+        [
+            "Analytics Dashboard",
+            "Chat Explorer",
+            "Keyword Search",
+            "Response Latency",
+            "Intelligence",
+        ]
+    )
 
     with tab1:
         show_analytics_dashboard(df)
@@ -122,6 +137,10 @@ def main():
 
     with tab4:
         show_latency_dashboard(df)
+
+    with tab5:
+        show_intelligence_chat(df)
+
 
 if __name__ == "__main__":
     main()
